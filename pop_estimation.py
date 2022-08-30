@@ -139,6 +139,7 @@ def cal_pop():
                 deaths = ((t_pop[age][0] * (mort['95+ years'][0]))) / 100000 + ((t_pop[age+1][0] * (mort['95+ years'][0]))) / 100000
                 t_pop.at[1, age + 1] = ((t_pop[age][0]+t_pop[age+1][0]) - deaths)
                 print(t_pop[age][1])
+    print(t_pop.head(5))
 
 def slow_aging():
     t_pop_slow = t_pop.copy()
@@ -391,9 +392,7 @@ def age_grp_pop():
                 total_sum = 0
     return pop
 
-
 def cal_yld():
-    pop_yld = t_pop.copy()
     gbd_yld = gbd[gbd['measure_name']=='YLDs (Years Lived with Disability)']
     gbd_yld = gbd_yld.reset_index()
     gbd_yld['yld_value'] = 0
@@ -506,13 +505,124 @@ def cal_yld():
                 temp_value = np.array(temp)
                 yld = temp_value[0] * pop[20]['95+ years']
                 gbd_yld.loc[(gbd_yld['cause_name']==cause) & (gbd_yld['age_name']=='95+ years'),'yld_value'] = yld/100000
-    print(gbd_yld.tail(5))
+    return gbd_yld
+
+def sa_yld():
+    gbd_sayld = gbd_yld.copy()
+    gbd_sayld['yld_value_slow'] = gbd_yld['yld_value']
+    for age in single_age:
+        yld = 0
+        temp = 0
+        for cause in gbd_sayld['cause_name'].unique():
+            if (age>=30 and age<35):
+                temp = (gbd_sayld.loc[(gbd_yld['cause_name']==cause) & (gbd_sayld['age_name']=='25-29 years')]['val'])
+                temp_value = np.array(temp)
+                yld = temp_value[0] * pop[7]['30-34 years']
+                gbd_sayld.loc[(gbd_sayld['cause_name']==cause) & (gbd_sayld['age_name']=='30-34 years'),'yld_value_slow'] = yld/100000
+
+            if (age >= 35 and age < 40):
+                temp = (
+                gbd_sayld.loc[(gbd_yld['cause_name'] == cause) & (gbd_sayld['age_name'] == '30-34 years')]['val'])
+                temp_value = np.array(temp)
+                yld = temp_value[0] * pop[8]['35-39 years']
+                gbd_sayld.loc[(gbd_sayld['cause_name'] == cause) & (gbd_sayld['age_name'] == '35-39 years'), 'yld_value_slow'] = yld / 100000
+
+            if (age >= 40 and age < 45):
+                temp = (
+                gbd_sayld.loc[(gbd_yld['cause_name'] == cause) & (gbd_sayld['age_name'] == '35-39 years')]['val'])
+                temp_value = np.array(temp)
+                yld = temp_value[0] * pop[9]['40-44 years']
+                gbd_sayld.loc[(gbd_sayld['cause_name'] == cause) & (gbd_sayld['age_name'] == '40-44 years'), 'yld_value_slow'] = yld / 100000
+
+            if (age >= 45 and age < 50):
+                temp = (
+                gbd_sayld.loc[(gbd_yld['cause_name'] == cause) & (gbd_sayld['age_name'] == '40-44 years')]['val'])
+                temp_value = np.array(temp)
+                yld = temp_value[0] * pop[10]['45-49 years']
+                gbd_sayld.loc[(gbd_sayld['cause_name'] == cause) & (gbd_sayld['age_name'] == '45-49 years'), 'yld_value_slow'] = yld / 100000
+
+            if (age >= 50 and age < 55):
+                temp = (
+                gbd_sayld.loc[(gbd_yld['cause_name'] == cause) & (gbd_sayld['age_name'] == '45-49 years')]['val'])
+                temp_value = np.array(temp)
+                yld = temp_value[0] * pop[11]['50-54 years']
+                gbd_sayld.loc[(gbd_sayld['cause_name'] == cause) & (gbd_sayld['age_name'] == '50-54 years'), 'yld_value_slow'] = yld / 100000
+
+            if (age >= 55 and age < 60):
+                temp = (
+                gbd_sayld.loc[(gbd_yld['cause_name'] == cause) & (gbd_sayld['age_name'] == '50-54 years')]['val'])
+                temp_value = np.array(temp)
+                yld = temp_value[0] * pop[12]['55-59 years']
+                gbd_sayld.loc[(gbd_sayld['cause_name'] == cause) & (gbd_sayld['age_name'] == '55-59 years'), 'yld_value_slow'] = yld / 100000
+
+            if (age >= 60 and age < 65):
+                temp = (
+                gbd_sayld.loc[(gbd_yld['cause_name'] == cause) & (gbd_sayld['age_name'] == '55-59 years')]['val'])
+                temp_value = np.array(temp)
+                yld = temp_value[0] * pop[13]['60-64 years']
+                gbd_sayld.loc[(gbd_sayld['cause_name'] == cause) & (gbd_sayld['age_name'] == '60-64 years'), 'yld_value_slow'] = yld / 100000
+
+            if (age >= 65 and age < 70):
+                temp = (
+                gbd_sayld.loc[(gbd_yld['cause_name'] == cause) & (gbd_sayld['age_name'] == '60-64 years')]['val'])
+                temp_value = np.array(temp)
+                yld = temp_value[0] * pop[14]['65-69 years']
+                gbd_sayld.loc[(gbd_sayld['cause_name'] == cause) & (gbd_sayld['age_name'] == '65-69 years'), 'yld_value_slow'] = yld / 100000
+
+            if (age >= 70 and age < 75):
+                temp = (
+                gbd_sayld.loc[(gbd_yld['cause_name'] == cause) & (gbd_sayld['age_name'] == '65-69 years')]['val'])
+                temp_value = np.array(temp)
+                yld = temp_value[0] * pop[15]['70-74 years']
+                gbd_sayld.loc[(gbd_sayld['cause_name'] == cause) & (gbd_sayld['age_name'] == '70-74 years'), 'yld_value_slow'] = yld / 100000
+
+            if (age >= 75 and age < 80):
+                temp = (
+                gbd_sayld.loc[(gbd_yld['cause_name'] == cause) & (gbd_sayld['age_name'] == '70-74 years')]['val'])
+                temp_value = np.array(temp)
+                yld = temp_value[0] * pop[16]['75-79 years']
+                gbd_sayld.loc[(gbd_sayld['cause_name'] == cause) & (gbd_sayld['age_name'] == '75-79 years'), 'yld_value_slow'] = yld / 100000
+
+            if (age >= 80 and age < 85):
+                temp = (
+                gbd_sayld.loc[(gbd_yld['cause_name'] == cause) & (gbd_sayld['age_name'] == '75-79 years')]['val'])
+                temp_value = np.array(temp)
+                yld = temp_value[0] * pop[17]['80-84 years']
+                gbd_sayld.loc[(gbd_sayld['cause_name'] == cause) & (gbd_sayld['age_name'] == '80-84 years'), 'yld_value_slow'] = yld / 100000
+
+            if (age >= 85 and age < 90):
+                temp = (
+                gbd_sayld.loc[(gbd_yld['cause_name'] == cause) & (gbd_sayld['age_name'] == '80-84 years')]['val'])
+                temp_value = np.array(temp)
+                yld = temp_value[0] * pop[18]['85-89 years']
+                gbd_sayld.loc[(gbd_sayld['cause_name'] == cause) & (gbd_sayld['age_name'] == '85-89 years'), 'yld_value_slow'] = yld / 100000
+
+            if (age >= 90 and age < 95):
+                temp = (
+                gbd_sayld.loc[(gbd_yld['cause_name'] == cause) & (gbd_sayld['age_name'] == '85-89 years')]['val'])
+                temp_value = np.array(temp)
+                yld = temp_value[0] * pop[19]['90-94 years']
+                gbd_sayld.loc[(gbd_sayld['cause_name'] == cause) & (gbd_sayld['age_name'] == '90-94 years'), 'yld_value_slow'] = yld / 100000
+
+            if (age >= 95 and age < 101):
+                temp = (
+                gbd_sayld.loc[(gbd_yld['cause_name'] == cause) & (gbd_sayld['age_name'] == '90-94 years')]['val'])
+                temp_value = np.array(temp)
+                yld = temp_value[0] * pop[20]['95+ years']
+                gbd_sayld.loc[(gbd_sayld['cause_name'] == cause) & (gbd_sayld['age_name'] == '95+ years'), 'yld_value_slow'] = yld / 100000
+
+    return gbd_sayld
+
 
 pop = age_grp_pop()
-print(pop)
+pop_df = pd.DataFrame(pop)
+#print(pop)
 cal_pop()
+t_pop_slow = slow_aging()
+t_pop_slow_df = pd.DataFrame(t_pop_slow)
+gbd_yld = cal_yld()
+gbd_yld_new = sa_yld()
 
-#t_pop_slow = slow_aging()
-#print(t_pop.head(5))
-#print(t_pop_slow.head(5))
-cal_yld()
+gbd_yld_new.to_excel("output_final.xlsx")
+pop_df.to_excel("pop_output.xlsx")
+t_pop_slow_df.to_excel("pop_slow_output.xlsx")
