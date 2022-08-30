@@ -18,7 +18,7 @@ def cal_new_born():
     for age_grp in fert_age_grps:
         for age in age_checks:
             if (age_grp == age):
-                new_born = fert[age_grp][0]*(t_pop[age_grp][0]/2)
+                new_born = (fert[age_grp][0]/1000)*(t_pop[age_grp][0]/2)
                 births.append(new_born)
     return (sum(births))
 
@@ -139,7 +139,7 @@ def cal_pop():
                 deaths = ((t_pop[age][0] * (mort['95+ years'][0]))) / 100000 + ((t_pop[age+1][0] * (mort['95+ years'][0]))) / 100000
                 t_pop.at[1, age + 1] = ((t_pop[age][0]+t_pop[age+1][0]) - deaths)
                 print(t_pop[age][1])
-    print(t_pop.head(5))
+    return t_pop
 
 def slow_aging():
     t_pop_slow = t_pop.copy()
@@ -615,14 +615,11 @@ def sa_yld():
 
 
 pop = age_grp_pop()
-pop_df = pd.DataFrame(pop)
-#print(pop)
-cal_pop()
+t_pop = cal_pop()
 t_pop_slow = slow_aging()
-t_pop_slow_df = pd.DataFrame(t_pop_slow)
 gbd_yld = cal_yld()
 gbd_yld_new = sa_yld()
 
 gbd_yld_new.to_excel("output_final.xlsx")
-pop_df.to_excel("pop_output.xlsx")
-t_pop_slow_df.to_excel("pop_slow_output.xlsx")
+t_pop.to_excel("pop_output.xlsx")
+t_pop_slow.to_excel("pop_slow_output.xlsx")
