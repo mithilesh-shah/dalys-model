@@ -11,14 +11,14 @@ gbd = pd.read_excel("gbd.xlsx")
 
 #print(fert.columns)
 
-def cal_new_born():
+def cal_new_born(t_pop, fert,year):
     fert_age_grps = list(fert)
     births = []
     age_checks = np.arange(15,50,1)
     for age_grp in fert_age_grps:
         for age in age_checks:
             if (age_grp == age):
-                new_born = (fert[age_grp][0]/1000)*(t_pop[age_grp][0]/2)
+                new_born = (fert[age_grp][year]/1000)*(t_pop[age_grp][year]/2)
                 births.append(new_born)
     return (sum(births))
 
@@ -28,6 +28,15 @@ t_pop.at[1,0] = cal_new_born()
 #print(mort['<1 year'][0])
 single_age = np.arange(0,101,1)
 #print(single_age)
+
+def total_pop():
+    for year in t_pop['Year'].unique():
+        pop_row = t_pop[t_pop['Year'] == year]
+        fert_row = fert[fert['Year'] == year]
+        new_borns = cal_new_born(pop_row,fert_row,year)
+        t_pop.at[year,0] = new_borns
+        cal_pop()
+
 def cal_pop():
     for age in single_age:
         deaths = 0
