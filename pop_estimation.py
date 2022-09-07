@@ -10,9 +10,12 @@ mort = pd.read_excel("mortality.xlsx")
 gbd = pd.read_excel("gbd.xlsx")
 
 #print(fert.columns)
+t_pop.set_index('Year', inplace=True)
+pop_age = list(t_pop)
+fert_age_grps = list(fert)
 
 def cal_new_born(t_pop, fert,year):
-    fert_age_grps = list(fert)
+
     births = []
     age_checks = np.arange(15,50,1)
     for age_grp in fert_age_grps:
@@ -22,7 +25,7 @@ def cal_new_born(t_pop, fert,year):
                 births.append(new_born)
     return (sum(births))
 
-t_pop.at[1,0] = cal_new_born()
+#t_pop.at[1,0] = cal_new_born()
 #print(t_pop)
 
 #print(mort['<1 year'][0])
@@ -30,125 +33,123 @@ single_age = np.arange(0,101,1)
 #print(single_age)
 
 def total_pop():
-    for year in t_pop['Year'].unique():
-        pop_row = t_pop[t_pop['Year'] == year]
-        fert_row = fert[fert['Year'] == year]
-        new_borns = cal_new_born(pop_row,fert_row,year)
-        t_pop.at[year,0] = new_borns
-        cal_pop()
+    for year, pop_row in t_pop.iterrows():
+        for age in pop_age :
+            if (year >= 2021 and year < 2100):
+                t_population = cal_pop(year,age)
+                print(t_population.head(10))
 
-def cal_pop():
-    for age in single_age:
+def cal_pop(year, age):
         deaths = 0
         if age == 0:
-            deaths = ((t_pop[age][0]*(mort['<1 year'][0])))/100000
-            t_pop.at[1,age+1] = (t_pop[age][0]) - deaths
+            deaths = ((t_pop[age][year]*(mort['<1 year'][0])))/100000
+            t_pop.at[year+1,age+1] = (t_pop[age][year]) - deaths
         if (age>=1 and age<5):
             print(age)
-            deaths = ((t_pop[age][0]*(mort['1-4 years'][0])))/100000
-            t_pop.at[1,age+1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year]*(mort['1-4 years'][0])))/100000
+            t_pop.at[year+1,age+1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age>=5 and age<10):
             print(age)
-            deaths = ((t_pop[age][0]*(mort['5-9 years'][0])))/100000
-            t_pop.at[1,age+1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year]*(mort['5-9 years'][0])))/100000
+            t_pop.at[year+1,age+1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 10 and age < 15):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['10-14 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['10-14 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 15 and age < 20):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['15-19 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['15-19 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 20 and age < 25):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['20-24 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['20-24 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 25 and age < 30):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['25-29 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['25-29 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 30 and age < 35):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['30-34 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['30-34 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 35 and age < 40):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['35-39 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['35-39 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 40 and age < 45):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['40-44 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['40-44 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 45 and age < 50):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['45-49 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['45-49 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 50 and age < 55):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['50-54 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['50-54 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 55 and age < 60):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['55-59 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['55-59 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 60 and age < 65):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['60-64 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['60-64 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 65 and age < 70):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['65-69 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['65-69 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 70 and age < 75):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['70-74 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['70-74 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 75 and age < 80):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['75-79 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['75-79 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 80 and age < 85):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['80-84 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['80-84 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 85 and age < 90):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['85-89 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['85-89 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 90 and age < 95):
             print(age)
-            deaths = ((t_pop[age][0] * (mort['90-94 years'][0]))) / 100000
-            t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-            print(t_pop[age][1])
+            deaths = ((t_pop[age][year] * (mort['90-94 years'][0]))) / 100000
+            t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+            print(t_pop[age][year])
         if (age >= 95 and age<99):
                 print(age)
-                deaths = ((t_pop[age][0] * (mort['95+ years'][0]))) / 100000
-                t_pop.at[1, age + 1] = ((t_pop[age][0]) - deaths)
-                print(t_pop[age][1])
+                deaths = ((t_pop[age][year] * (mort['95+ years'][0]))) / 100000
+                t_pop.at[year+1, age + 1] = ((t_pop[age][year]) - deaths)
+                print(t_pop[age][year])
         if (age == 99):
                 print(age)
-                deaths = ((t_pop[age][0] * (mort['95+ years'][0]))) / 100000 + ((t_pop[age+1][0] * (mort['95+ years'][0]))) / 100000
-                t_pop.at[1, age + 1] = ((t_pop[age][0]+t_pop[age+1][0]) - deaths)
-                print(t_pop[age][1])
-    return t_pop
+                deaths = ((t_pop[age][year] * (mort['95+ years'][0]))) / 100000 + ((t_pop[age+1][year] * (mort['95+ years'][0]))) / 100000
+                t_pop.at[year+1, age+1] = ((t_pop[age][year]+t_pop[age+1][year]) - deaths)
+                print(t_pop[age][year])
+        return t_pop
 
 def slow_aging():
     t_pop_slow = t_pop.copy()
@@ -623,12 +624,12 @@ def sa_yld():
     return gbd_sayld
 
 
-pop = age_grp_pop()
-t_pop = cal_pop()
-t_pop_slow = slow_aging()
-gbd_yld = cal_yld()
-gbd_yld_new = sa_yld()
+#pop = age_grp_pop()
+total_pop()
+#t_pop_slow = slow_aging()
+#gbd_yld = cal_yld()
+#gbd_yld_new = sa_yld()
 
-gbd_yld_new.to_excel("output_final.xlsx")
-t_pop.to_excel("pop_output.xlsx")
-t_pop_slow.to_excel("pop_slow_output.xlsx")
+#gbd_yld_new.to_excel("output_final.xlsx")
+#t_pop.to_excel("pop_output.xlsx")
+#t_pop_slow.to_excel("pop_slow_output.xlsx")
