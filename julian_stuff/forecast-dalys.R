@@ -47,10 +47,10 @@ start_year <- 2021
 end_year <- 2122
 end_age <- 100
 no_births <- FALSE
-fertility_type <- "fertility_med"
+fertility_type <- "fertility_est"
 
 
-loc_name <- locations[3]
+loc_name <- locations[1]
 # Select which region to focus on and which years to use as a starting point
 fertility_df <- filter(all_fertility_df, location == loc_name, year >= start_year)
 population_df <- filter(all_population_df, location == loc_name)
@@ -59,9 +59,9 @@ disability_df <- filter(all_disability_df, location == loc_name)
 
 
 ## Slow_Aging
-mortality_df <- slow_mortality(mortality_df, slow_by = 0.1)
-disability_df <- slow_disability(disability_df, slow_by = 0.1)
-fertility_df <- slow_fertility(fertility_df, slow_by = 0.1, fertility_type = fertility_type)
+mortality_df <- slow_mortality(mortality_df, slow_by = 0.)
+disability_df <- slow_disability(disability_df, slow_by = 0.)
+fertility_df <- slow_fertility(fertility_df, slow_by = 0., fertility_type = fertility_type)
 ggplot(mortality_df) + theme_bw() +
   geom_line(data=mortality_df, aes(x = age, y = mortality/100000, color = "Mortality")) +
   geom_line(data=mortality_df, aes(x = age, y = mortality_new/100000, color = "Mortality"), linetype = "dashed") +
