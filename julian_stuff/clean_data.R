@@ -477,13 +477,17 @@ ggsave("figures/disability_by_cluster.pdf", width = 15, height = 5)
 "
 Get GNI per capita for each country in each region
 "
-loc_cols <- c("High income" = "forestgreen", "Upper middle income" = "green", 
-              "Lower middle income" = "orange", "Low income" = "red")
+loc_cols <- c("World Bank High Income" = "forestgreen", "World Bank Upper Middle Income" = "green", 
+              "World Bank Lower Middle Income" = "orange", "World Bank Low Income" = "red")
 
 classification_data <- read_xlsx("/Users/julianashwin/Downloads/WDIEXCEL.xlsx", sheet = "Country") %>%
   filter(!is.na(`Income Group`)) %>%
   select(`Country Code`, `Table Name`, `Income Group`) %>%
-  rename(name = `Table Name`, code = `Country Code`, income_group = `Income Group`)
+  rename(name = `Table Name`, code = `Country Code`, income_group = `Income Group`) %>%
+  mutate(income_group = case_when(income_group == "High income" ~ "World Bank High Income",
+                                  income_group == "Upper middle income" ~ "World Bank Upper Middle Income",
+                                  income_group == "Lower middle income" ~ "World Bank Lower Middle Income",
+                                  income_group == "Low income" ~ "World Bank Low Income",))
 country_codes <- unique(classification_data$code)
 
 
@@ -518,7 +522,7 @@ macro_data <- macro_data_in %>%
 # Check some special cases
 unique(macro_data[which(macro_data$GNI_growth_mean < 0), c("name", "income_group", "GNI_growth_mean")])
 unique(macro_data[which(macro_data$location != "Country"), c("name", "GNI_growth_mean")])
-unique(macro_data[which(is.na(macro_data$income_group)), c("name", "income_group")])
+unique(macro_data[which(is.na(macro_data$income_group)), c("location", "income_group")])
 
   
   
@@ -559,10 +563,10 @@ growth_proj <- macro_data %>% select(-location, -code, -GNI_growth_mean, -GNI_gr
   mutate(mean_grwth = case_when(year <= 2021 ~ 0, TRUE ~ mean_grwth)) %>%
   mutate(factor = cumprod(1 + mean_grwth), pop_share = population/total_pop) %>%
   mutate(GNI_pc = GNI_pc*factor) %>%
-  mutate(income_group_proj = case_when(GNI_pc < 1085 ~ "Low income",
-                                       GNI_pc < 4256 ~ "Lower middle income",
-                                       GNI_pc < 13206 ~ "Upper middle income",
-                                       GNI_pc >= 13206 ~ "High income"))
+  mutate(income_group_proj = case_when(GNI_pc < 1085 ~ "World Bank Low Income",
+                                       GNI_pc < 4256 ~ "World Bank Lower Middle Income",
+                                       GNI_pc < 13206 ~ "World Bank Upper Middle Income",
+                                       GNI_pc >= 13206 ~ "World Bank High Income"))
 
 
 

@@ -18,7 +18,8 @@ all_population_df <- read.csv("clean_data/population.csv",stringsAsFactors = F)
 all_mortality_df <- read.csv("clean_data/mortality_medium.csv",stringsAsFactors = F, check.names=F)
 all_disability_df <- read.csv("clean_data/disability_medium.csv",stringsAsFactors = F, check.names=F)
 cause_tree_df <- read.csv("clean_data/cause_definitions.csv", stringsAsFactors = F)
-income_transition_df <- read.csv("clean_data/income_transition_shares.csv", stringsAsFactors = F)
+income_transition_df <- read.csv("clean_data/income_transition_shares.csv", 
+                                 stringsAsFactors = F, check.names=F)
 
 locations <- unique(all_mortality_df$location)
 
@@ -47,26 +48,62 @@ start_year <- 2021
 end_year <- 2122
 end_age <- 100
 no_births <- FALSE
-fertility_type <- "fertility_est"
+fertility_type <- "fertility_med"
+growth_transitions <- TRUE
 
 
-loc_name <- locations[1]
+loc_name <- locations[3]
 # Select which region to focus on and which years to use as a starting point
-fertility_df <- filter(all_fertility_df, location == loc_name, year >= start_year)
 population_df <- filter(all_population_df, location == loc_name)
-mortality_df <- filter(all_mortality_df, location == loc_name)
-disability_df <- filter(all_disability_df, location == loc_name)
+fertility_df <- filter(all_fertility_df, location == loc_name, year >= start_year)
+mortality_df <- create_mortality_df(all_mortality_df, loc_name = loc_name, start_year = start_year, end_year = end_year, 
+                                    end_age = end_age, growth_transitions = growth_transitions, 
+                                    income_transition_df = income_transition_df)
+disability_df <- create_disability_df(all_disability_df, loc_name = loc_name, start_year = start_year, end_year = end_year, 
+                                    end_age = end_age, growth_transitions = growth_transitions, 
+                                    income_transition_df = income_transition_df)
 
 
-## Slow_Aging
-mortality_df <- slow_mortality(mortality_df, slow_by = 0.)
-disability_df <- slow_disability(disability_df, slow_by = 0.)
+"
+Growth vs no growth
+"
+forecasts_nogrowth <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "none",
+                                     start_year = start_year, end_year = end_year, end_age = end_age, 
+                                     no_births = no_births, fertility_type = "fertility_est", 
+                                     growth_transitions = FALSE) %>% mutate(growth = "No Growth", fertility = "2021")
+forecasts_growth <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "none",
+                                   start_year = start_year, end_year = end_year, end_age = end_age, 
+                                   no_births = no_births, fertility_type = "fertility_est", 
+                                   growth_transitions = TRUE) %>% mutate(growth = "Growth", fertility = "2021")
+forecasts_both <- rbind(forecasts_nogrowth, forecasts_growth)
+forecasts_nogrowth <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "none",
+                                     start_year = start_year, end_year = end_year, end_age = end_age, 
+                                     no_births = no_births, fertility_type = "fertility_med", 
+                                     growth_transitions = FALSE) %>% mutate(growth = "No Growth", fertility = "Medium")
+forecasts_growth <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "none",
+                                   start_year = start_year, end_year = end_year, end_age = end_age, 
+                                   no_births = no_births, fertility_type = "fertility_med", 
+                                   growth_transitions = TRUE) %>% mutate(growth = "Growth", fertility = "Medium")
+forecasts_both <- rbind(forecasts_both, forecasts_nogrowth, forecasts_growth)
+
+ggplot(forecasts_both) + theme_bw() + facet_wrap(vars(growth, fertility), scales = "free") + 
+  geom_line(aes(x = age, y = population, color = year, group = year)) + 
+  labs(x = "Age", y = "Population", color = "Year", title = loc_name)
+ggsave(paste0("figures/growth_nogrowth_pop_",loc_name,".pdf"), width = 6, height = 5)
+
+
+
+"
+Slow_Aging
+"
+mortality_df <- slow_mortality(mortality_df, slow_by = 0.1)
+disability_df <- slow_disability(disability_df, slow_by = 0.1)
 fertility_df <- slow_fertility(fertility_df, slow_by = 0., fertility_type = fertility_type)
-ggplot(mortality_df) + theme_bw() +
-  geom_line(data=mortality_df, aes(x = age, y = mortality/100000, color = "Mortality")) +
-  geom_line(data=mortality_df, aes(x = age, y = mortality_new/100000, color = "Mortality"), linetype = "dashed") +
-  geom_line(data=disability_df, aes(x = age, y = disability/100000, color = "Disability")) +
-  geom_line(data=disability_df, aes(x = age, y = disability_new/100000, color = "Disability"), linetype = "dashed") +
+ggplot() + theme_bw() +
+  geom_line(data=filter(mortality_df, year == 2030), aes(x = age, y = mortality/100000, color = "Mortality")) +
+  geom_line(data=filter(mortality_df, year == 2030), aes(x = age, y = mortality_new/100000, color = "Mortality"), linetype = "dashed") +
+  geom_line(data=filter(disability_df, year == 2030), aes(x = age, y = disability/100000, color = "Disability")) +
+  geom_line(data=filter(disability_df, year == 2030), aes(x = age, y = disability_new/100000, color = "Disability"), linetype = "dashed") +
   geom_line(data=fertility_df, aes(x = age, y = fertility, group = year, color = "Fertility", alpha = year)) +
   geom_line(data=fertility_df, aes(x = age, y = fertility_new, group = year, color = "Fertility", alpha = year), linetype = "dashed") + 
   labs(x = "Age", y = "Rates", color = "Variable")
@@ -79,7 +116,8 @@ Forecasts under the baseline scenario
 "
 forecasts_base <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "none",
                                  start_year = start_year, end_year = end_year, end_age = end_age, 
-                                 no_births = no_births, fertility_type = fertility_type)
+                                 no_births = no_births, fertility_type = fertility_type, 
+                                 growth_transitions = growth_transitions)
 plot_df <- forecasts_base %>%
   full_join(select(population_df, c(year, age, population))) %>% arrange(year, age) %>%
   mutate(forecast = case_when(year > start_year  ~ "Forecast", year <= start_year  ~ "Estimate"))
@@ -107,7 +145,8 @@ disability_df$disability_new <- disability_df$disability - disability_df$disabil
 # Forecast population
 forecasts_infant <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "both",
                                  start_year = start_year, end_year = end_year, end_age = end_age, 
-                                 no_births = no_births, fertility_type = fertility_type)
+                                 no_births = no_births, fertility_type = fertility_type, 
+                                 growth_transitions = growth_transitions)
 infant3_plt <- ggplot(filter(forecasts_infant, year%%10 == 0), aes(x = age)) + theme_bw() +
   geom_line(aes(y = population/1e6, group = as.character(year), color = year)) + 
   labs(color = "Year") + xlab("Age") + ylab("Population (millions)") + ggtitle("Infant diseases")
@@ -115,7 +154,7 @@ infant3_plt <- ggplot(filter(forecasts_infant, year%%10 == 0), aes(x = age)) + t
 # Compare to benchmark
 dalys_infant3 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
                                start_year = start_year, end_year = end_year, no_births = no_births, 
-                               fertility_type = fertility_type)
+                               fertility_type = fertility_type, growth_transitions = growth_transitions)
 decomp_infant3 <- ggplot(dalys_infant3, aes(x = year)) + theme_bw() + 
   geom_line(aes(y = daly_diff/1e6), color = "black") +
   geom_bar(aes(y = daly_diff/1e6, fill = "Complimentarity"), stat = "identity") +
@@ -136,7 +175,8 @@ disability_df$disability_new <- disability_df$disability - disability_df$disabil
 # Forecast population
 forecasts_infant <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "both",
                                    start_year = start_year, end_year = end_year, end_age = end_age, 
-                                   no_births = no_births, fertility_type = fertility_type)
+                                   no_births = no_births, fertility_type = fertility_type,
+                                   growth_transitions = growth_transitions)
 infant4_plt <- ggplot(filter(forecasts_infant, year%%10 == 0), aes(x = age)) + theme_bw() +
   geom_line(aes(y = population/1e6, group = as.character(year), color = year)) + 
   labs(color = "Year") + xlab("Age") + ylab("Population (millions)") + ggtitle("Infant diseases")
@@ -144,7 +184,7 @@ infant4_plt <- ggplot(filter(forecasts_infant, year%%10 == 0), aes(x = age)) + t
 # Compare to benchmark
 dalys_infant4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
                                   start_year = start_year, end_year = end_year, no_births = no_births, 
-                                  fertility_type = fertility_type)
+                                  fertility_type = fertility_type, growth_transitions = growth_transitions)
 decomp_infant4 <- ggplot(dalys_infant4, aes(x = year)) +
   geom_line(aes(y = daly_diff/1e6), color = "black") +
   geom_bar(aes(y = daly_diff/1e6, fill = "Complimentarity"), stat = "identity") +
@@ -166,14 +206,15 @@ disability_df$disability_new <- disability_df$disability - disability_df$disabil
 # Forecast population
 forecasts_adult <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "both",
                                    start_year = start_year, end_year = end_year, end_age = end_age, 
-                                   no_births = no_births, fertility_type = fertility_type) 
+                                   no_births = no_births, fertility_type = fertility_type,
+                                  growth_transitions = growth_transitions) 
 adult3_plt <- ggplot(filter(forecasts_adult, year%%10 == 0), aes(x = age)) + theme_bw() +
   geom_line(aes(y = population/1e6, group = as.character(year), color = year)) +
   labs(color = "Year") + xlab("Age") + ylab("") + ggtitle("Adult diseases")
 # Compare to benchmark
 dalys_adult3 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
                                start_year = start_year, end_year = end_year, no_births = no_births,
-                               fertility_type = fertility_type)
+                               fertility_type = fertility_type, growth_transitions = growth_transitions)
 decomp_adult3 <- ggplot(dalys_adult3, aes(x = year)) +
   geom_line(aes(y = daly_diff/1e6), color = "black") +
   geom_bar(aes(y = daly_diff/1e6, fill = "Complimentarity"), stat = "identity") +
@@ -194,14 +235,15 @@ disability_df$disability_new <- disability_df$disability - disability_df$disabil
 # Forecast population
 forecasts_adult <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "both",
                                   start_year = start_year, end_year = end_year, end_age = end_age, 
-                                  no_births = no_births, fertility_type = fertility_type) 
+                                  no_births = no_births, fertility_type = fertility_type, 
+                                  growth_transitions = growth_transitions) 
 adult_early4_plt <- ggplot(filter(forecasts_adult, year%%10 == 0), aes(x = age)) + theme_bw() +
   geom_line(aes(y = population/1e6, group = as.character(year), color = year)) +
   labs(color = "Year") + xlab("Age") + ylab("") + ggtitle("Adult (early) diseases")
 # Compare to benchmark
 dalys_adult_early4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
                                   start_year = start_year, end_year = end_year, no_births = no_births,
-                                  fertility_type = fertility_type)
+                                  fertility_type = fertility_type, growth_transitions = growth_transitions)
 decomp_adult_early4 <- ggplot(dalys_adult_early4, aes(x = year)) +
   geom_line(aes(y = daly_diff/1e6), color = "black") +
   geom_bar(aes(y = daly_diff/1e6, fill = "Complimentarity"), stat = "identity") +
@@ -223,14 +265,15 @@ disability_df$disability_new <- disability_df$disability - disability_df$disabil
 # Forecast population
 forecasts_adult <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "both",
                                   start_year = start_year, end_year = end_year, end_age = end_age, 
-                                  no_births = no_births, fertility_type = fertility_type) 
+                                  no_births = no_births, fertility_type = fertility_type, 
+                                  growth_transitions = growth_transitions) 
 adult_late4_plt <- ggplot(filter(forecasts_adult, year%%10 == 0), aes(x = age)) + theme_bw() +
   geom_line(aes(y = population/1e6, group = as.character(year), color = year)) +
   labs(color = "Year") + xlab("Age") + ylab("") + ggtitle("Adult (late) diseases")
 # Compare to benchmark
 dalys_adult_late4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
                                         start_year = start_year, end_year = end_year, no_births = no_births,
-                                        fertility_type = fertility_type)
+                                        fertility_type = fertility_type, growth_transitions = growth_transitions)
 decomp_adult_late4 <- ggplot(dalys_adult_late4, aes(x = year)) +
   geom_line(aes(y = daly_diff/1e6), color = "black") +
   geom_bar(aes(y = daly_diff/1e6, fill = "Complimentarity"), stat = "identity") +
@@ -251,14 +294,15 @@ disability_df$disability_new <- disability_df$disability - disability_df$disabil
 # Forecast population
 forecasts_senescent <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "both",
                                   start_year = start_year, end_year = end_year, end_age = end_age, 
-                                  no_births = no_births, fertility_type = fertility_type)
+                                  no_births = no_births, fertility_type = fertility_type, 
+                                  growth_transitions = growth_transitions)
 senescent3_plt <- ggplot(filter(forecasts_senescent, year%%10 == 0), aes(x = age)) + theme_bw() +
   geom_line(aes(y = population/1e6, group = as.character(year), color = year)) + 
   labs(color = "Year") + xlab("Age") + ylab("") + ggtitle("Senescent diseases")
 # Compare to benchmark
 dalys_senescent3 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
                                  start_year = start_year, end_year = end_year, no_births = no_births,
-                                 fertility_type = fertility_type)
+                                 fertility_type = fertility_type, growth_transitions = growth_transitions)
 decomp_senescent3 <- ggplot(dalys_senescent3, aes(x = year)) +
   geom_line(aes(y = daly_diff/1e6), color = "black") +
   geom_bar(aes(y = daly_diff/1e6, fill = "Complimentarity"), stat = "identity") +
@@ -272,21 +316,20 @@ Remove senescent diseases (cluster4)
 "
 senescent4_diseases <- cause_tree_df$cause_name[which(cause_tree_df$cluster4 == "Senescent")] 
 # Define the change we want to assess
-mortality_df$mortality_senescent4 <- rowSums(mortality_df[,which(names(mortality_df) %in% senescent4_diseases)])
-mortality_df$mortality_new <- mortality_df$mortality - mortality_df$mortality_senescent4
-disability_df$disability_senescent4 <- rowSums(disability_df[,which(names(disability_df) %in% senescent4_diseases)])
-disability_df$disability_new <- disability_df$disability - disability_df$disability_senescent4
+mortality_df <- def_mortality_new(mortality_df, senescent4_diseases)
+disability_df <- def_disability_new(disability_df, senescent4_diseases) 
 # Forecast population
 forecasts_senescent <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "both",
                                       start_year = start_year, end_year = end_year, end_age = end_age, 
-                                      no_births = no_births, fertility_type = fertility_type)
+                                      no_births = no_births, fertility_type = fertility_type,
+                                      growth_transitions = growth_transitions)
 senescent4_plt <- ggplot(filter(forecasts_senescent, year%%10 == 0), aes(x = age)) + theme_bw() +
   geom_line(aes(y = population/1e6, group = as.character(year), color = year)) + 
   labs(color = "Year") + xlab("Age") + ylab("") + ggtitle("Senescent diseases")
 # Compare to benchmark
 dalys_senescent4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
                                       start_year = start_year, end_year = end_year, no_births = no_births,
-                                      fertility_type = fertility_type)
+                                      fertility_type = fertility_type, growth_transitions = growth_transitions)
 decomp_senescent4 <- ggplot(dalys_senescent3, aes(x = year)) +
   geom_line(aes(y = daly_diff/1e6), color = "black") +
   geom_bar(aes(y = daly_diff/1e6, fill = "Complimentarity"), stat = "identity") +
@@ -303,15 +346,17 @@ mortality_df <- slow_mortality(mortality_df, slow_by = 0.2)
 disability_df <- slow_disability(disability_df, slow_by = 0.2)
 # Forecast population
 forecasts_slow <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "both",
-                                      start_year = start_year, end_year = end_year, end_age = end_age, 
-                                      no_births = no_births, fertility_type = fertility_type)
+                                 start_year = start_year, end_year = end_year, end_age = end_age, 
+                                 no_births = no_births, fertility_type = fertility_type,
+                                 growth_transitions = growth_transitions)
 slow_plt <- ggplot(filter(forecasts_slow, year%%10 == 0), aes(x = age)) + theme_bw() +
   geom_line(aes(y = population/1e6, group = as.character(year), color = year)) + 
   labs(color = "Year") + xlab("Age") + ylab("") + ggtitle("Slow aging")
 # Compare to benchmark
 dalys_slow <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
                                 start_year = start_year, end_year = end_year, no_births = no_births,
-                                fertility_type = fertility_type)
+                                fertility_type = fertility_type,
+                                growth_transitions = growth_transitions)
 decomp_slow <- ggplot(dalys_slow, aes(x = year)) + 
   geom_line(aes(y = daly_diff/1e6), color = "black") +
   geom_bar(aes(y = daly_diff/1e6, fill = "Complimentarity"), stat = "identity") +
