@@ -435,123 +435,189 @@ end_year <- 2122
 end_age <- 100
 no_births <- FALSE
 fertility_type <- "fertility_med"
+growth_transitions <- TRUE
 
 results_df <- data.frame()
-for (loc_name in locations){
+for (loc_name in locations[2:5]){
   print(paste0("Analysis for ", loc_name))
+  # Select which region to focus on and which years to use as a starting point
+  population_df <- filter(all_population_df, location == loc_name)
+  fertility_df <- filter(all_fertility_df, location == loc_name, year >= start_year)
+  mortality_df <- create_mortality_df(all_mortality_df, loc_name = loc_name, start_year = start_year, end_year = end_year, 
+                                      end_age = end_age, growth_transitions = growth_transitions, 
+                                      income_transition_df = income_transition_df)
+  disability_df <- create_disability_df(all_disability_df, loc_name = loc_name, start_year = start_year, end_year = end_year, 
+                                        end_age = end_age, growth_transitions = growth_transitions, 
+                                        income_transition_df = income_transition_df)
   for (fertility_type in fertility_types){
     print(paste0("Fertility assumption: ", fertility_type))
-    # Select which region to focus on and which years to use as a starting point
-    fertility_df <- filter(all_fertility_df, location == loc_name, year >= start_year)
-    population_df <- filter(all_population_df, location == loc_name)
-    mortality_df <- filter(all_mortality_df, location == loc_name)
-    disability_df <- filter(all_disability_df, location == loc_name)
-    # Remove infant diseases
-    mortality_df <- def_mortality_new(mortality_df, infant3_diseases)
-    disability_df <- def_disability_new(disability_df, infant3_diseases)
-    dalys_infant3 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
-                                       start_year = start_year, end_year = end_year, no_births = no_births,
-                                       fertility_type = fertility_type) %>%
-      mutate(location = loc_name, intervention = "Infant", fertility_type = fertility_type, clusters = 3)
-    mortality_df <- def_mortality_new(mortality_df, infant4_diseases)
-    disability_df <- def_disability_new(disability_df, infant4_diseases)
-    dalys_infant4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
-                                       start_year = start_year, end_year = end_year, no_births = no_births,
-                                       fertility_type = fertility_type) %>%
-      mutate(location = loc_name, intervention = "Infant", fertility_type = fertility_type, clusters = 4)
-    # Remove adult diseases
-    mortality_df <- def_mortality_new(mortality_df, adult3_diseases)
-    disability_df <- def_disability_new(disability_df, adult3_diseases)
-    dalys_adult3 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
-                                       start_year = start_year, end_year = end_year, no_births = no_births,
-                                       fertility_type = fertility_type) %>%
-      mutate(location = loc_name, intervention = "Adult", fertility_type = fertility_type, clusters = 3)
-    mortality_df <- def_mortality_new(mortality_df, adult_early4_diseases)
-    disability_df <- def_disability_new(disability_df, adult_early4_diseases)
-    dalys_adult_early4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
-                                       start_year = start_year, end_year = end_year, no_births = no_births,
-                                       fertility_type = fertility_type) %>%
-      mutate(location = loc_name, intervention = "Adult_early", fertility_type = fertility_type, clusters = 4)
-    mortality_df <- def_mortality_new(mortality_df, adult_late4_diseases)
-    disability_df <- def_disability_new(disability_df, adult_late4_diseases)
-    dalys_adult_late4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
-                                            start_year = start_year, end_year = end_year, no_births = no_births,
-                                            fertility_type = fertility_type) %>%
-      mutate(location = loc_name, intervention = "Adult_late", fertility_type = fertility_type, clusters = 4)
-    # Remove senescent diseases
-    mortality_df <- def_mortality_new(mortality_df, senescent3_diseases)
-    disability_df <- def_disability_new(disability_df, senescent3_diseases)
-    dalys_senescent3 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
-                                       start_year = start_year, end_year = end_year, no_births = no_births,
-                                       fertility_type = fertility_type) %>%
-      mutate(location = loc_name, intervention = "Senescent", fertility_type = fertility_type, clusters = 3)
-    mortality_df <- def_mortality_new(mortality_df, senescent4_diseases)
-    disability_df <- def_disability_new(disability_df, senescent4_diseases)
-    dalys_senescent4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
-                                       start_year = start_year, end_year = end_year, no_births = no_births,
-                                       fertility_type = fertility_type) %>%
-      mutate(location = loc_name, intervention = "Senescent", fertility_type = fertility_type, clusters = 4)
-    # Slow aging by 10%
-    mortality_df <- slow_mortality(mortality_df, slow_by = 0.1)
-    disability_df <- slow_disability(disability_df, slow_by = 0.1)
-    dalys_slow_10pc <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
+    for (growth_transitions in c(FALSE, TRUE)){
+      # Remove infant diseases
+      mortality_df <- def_mortality_new(mortality_df, infant3_diseases)
+      disability_df <- def_disability_new(disability_df, infant3_diseases)
+      dalys_infant3 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
                                          start_year = start_year, end_year = end_year, no_births = no_births,
-                                         fertility_type = fertility_type) %>% 
-      mutate(location = loc_name, intervention = "Slow_10pc", fertility_type = fertility_type, clusters = 3)
-    # Slow aging by 25%
-    mortality_df <- slow_mortality(mortality_df, slow_by = 0.25)
-    disability_df <- slow_disability(disability_df, slow_by = 0.25)
-    dalys_slow_25pc <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
+                                         fertility_type = fertility_type, growth_transitions = growth_transitions) %>%
+        mutate(location = loc_name, intervention = "Infant", fertility_type = fertility_type, 
+               clusters = "3", growth_trans = growth_transitions)
+      mortality_df <- def_mortality_new(mortality_df, infant4_diseases)
+      disability_df <- def_disability_new(disability_df, infant4_diseases)
+      dalys_infant4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
                                          start_year = start_year, end_year = end_year, no_births = no_births,
-                                         fertility_type = fertility_type) %>% 
-      mutate(location = loc_name, intervention = "Slow_25pc", fertility_type = fertility_type, clusters = 3)
-    
-    # Append all results
-    results_df <- rbind(results_df, dalys_infant3, dalys_adult3, dalys_senescent3, 
-                        dalys_infant4, dalys_adult_early4, dalys_adult_late4, dalys_senescent4,
-                        dalys_slow_10pc, dalys_slow_25pc)
+                                         fertility_type = fertility_type, growth_transitions = growth_transitions) %>%
+        mutate(location = loc_name, intervention = "Infant", fertility_type = fertility_type, 
+               clusters = "4", growth_trans = growth_transitions)
+      # Remove adult diseases
+      mortality_df <- def_mortality_new(mortality_df, adult3_diseases)
+      disability_df <- def_disability_new(disability_df, adult3_diseases)
+      dalys_adult3 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
+                                         start_year = start_year, end_year = end_year, no_births = no_births,
+                                         fertility_type = fertility_type, growth_transitions = growth_transitions) %>%
+        mutate(location = loc_name, intervention = "Adult", fertility_type = fertility_type, 
+               clusters = "3", growth_trans = growth_transitions)
+      mortality_df <- def_mortality_new(mortality_df, adult_early4_diseases)
+      disability_df <- def_disability_new(disability_df, adult_early4_diseases)
+      dalys_adult_early4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
+                                         start_year = start_year, end_year = end_year, no_births = no_births,
+                                         fertility_type = fertility_type, growth_transitions = growth_transitions) %>%
+        mutate(location = loc_name, intervention = "Adult_early", fertility_type = fertility_type, 
+               clusters = "4", growth_trans = growth_transitions)
+      mortality_df <- def_mortality_new(mortality_df, adult_late4_diseases)
+      disability_df <- def_disability_new(disability_df, adult_late4_diseases)
+      dalys_adult_late4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
+                                              start_year = start_year, end_year = end_year, no_births = no_births,
+                                              fertility_type = fertility_type, growth_transitions = growth_transitions) %>%
+        mutate(location = loc_name, intervention = "Adult_late", fertility_type = fertility_type, 
+               clusters = "4", growth_trans = growth_transitions)
+      # Remove senescent diseases
+      mortality_df <- def_mortality_new(mortality_df, senescent3_diseases)
+      disability_df <- def_disability_new(disability_df, senescent3_diseases)
+      dalys_senescent3 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
+                                         start_year = start_year, end_year = end_year, no_births = no_births,
+                                         fertility_type = fertility_type, growth_transitions = growth_transitions) %>%
+        mutate(location = loc_name, intervention = "Senescent", fertility_type = fertility_type, 
+               clusters = "3", growth_trans = growth_transitions)
+      mortality_df <- def_mortality_new(mortality_df, senescent4_diseases)
+      disability_df <- def_disability_new(disability_df, senescent4_diseases)
+      dalys_senescent4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
+                                         start_year = start_year, end_year = end_year, no_births = no_births,
+                                         fertility_type = fertility_type, growth_transitions = growth_transitions) %>%
+        mutate(location = loc_name, intervention = "Senescent", fertility_type = fertility_type, 
+               clusters = "4", growth_trans = growth_transitions)
+      # Slow aging by 10%
+      mortality_df <- slow_mortality(mortality_df, slow_by = 0.1)
+      disability_df <- slow_disability(disability_df, slow_by = 0.1)
+      dalys_slow_10pc <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
+                                           start_year = start_year, end_year = end_year, no_births = no_births,
+                                           fertility_type = fertility_type, growth_transitions = growth_transitions) %>% 
+        mutate(location = loc_name, intervention = "Slow_10pc", fertility_type = fertility_type, 
+               clusters = "NA", growth_trans = growth_transitions)
+      # Slow aging by 25%
+      mortality_df <- slow_mortality(mortality_df, slow_by = 0.25)
+      disability_df <- slow_disability(disability_df, slow_by = 0.25)
+      dalys_slow_25pc <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
+                                           start_year = start_year, end_year = end_year, no_births = no_births,
+                                           fertility_type = fertility_type, growth_transitions = growth_transitions) %>% 
+        mutate(location = loc_name, intervention = "Slow_25pc", fertility_type = fertility_type, 
+               clusters = "NA", growth_trans = growth_transitions)
+      
+      # Append all results
+      results_df <- rbind(results_df, dalys_infant3, dalys_adult3, dalys_senescent3, 
+                          dalys_infant4, dalys_adult_early4, dalys_adult_late4, dalys_senescent4,
+                          dalys_slow_10pc, dalys_slow_25pc)
+    }
   }
 }
+# Rearrange and make sure location is an ordered factor
 results_df <- relocate(results_df, location,intervention, fertility_type, clusters, .before = year)
+results_df <- results_df %>% 
+  mutate(loc_order = case_when(str_detect(location, "High")  ~ 1,
+                               str_detect(location, "Upper") ~ 2,
+                               str_detect(location, "Lower") ~ 3,
+                               str_detect(location, "Low ") ~ 4)) %>%
+  arrange(loc_order, intervention, fertility_type, clusters, year)
+results_df$location <- factor(results_df$location, levels = unique(results_df$location), ordered = T)
 
-baseline_results <- filter(results_df, clusters == 3 & fertility_type == "fertility_med" &
-                             intervention != "Slow_10pc")
 
-ggplot(baseline_results, aes(x = year)) + theme_bw() + facet_wrap(.~location) +
+
+global_results_df <- results_df %>%
+  filter(fertility_type == "fertility_med" & clusters != "3") %>% 
+  group_by(intervention, year, growth_trans) %>%
+  summarise(across(where(is.numeric), sum))
+
+ggplot(global_results_df, aes(x = year)) + theme_bw() + 
+  facet_wrap(vars(growth_trans)) +
+  scale_color_manual("Scenario", values = c("Senescent" = "firebrick1", "Adult_late" = "blue3", 
+                                            "Adult_early" = "cornflowerblue", "Infant" = "forestgreen", 
+                                            "Slow_10pc" = "darkgoldenrod3", "Slow_25pc" = "orange")) +
+  geom_line(aes(y = daly_diff/1e9, color = intervention)) + 
+  labs(x = "Year", y = "DALYs gained (billions)")
+ggsave("figures/global_dalys_GvNG.pdf", width = 7, height = 3)
+
+# Plot dalys over time for baseline case
+glob_plt <- ggplot(filter(global_results_df,growth_trans == TRUE), aes(x = year)) + theme_bw() + 
+  scale_color_manual("Scenario", values = c("Senescent" = "firebrick1", "Adult_late" = "blue3", 
+                                            "Adult_early" = "cornflowerblue", "Infant" = "forestgreen", 
+                                            "Slow_10pc" = "darkgoldenrod3", "Slow_25pc" = "orange")) +
+  geom_line(aes(y = daly_diff/1e9, color = intervention)) + 
+  labs(x = "Year", y = "DALYs gained (billions)")
+
+reg_plt <- ggplot(filter(results_df,growth_trans == TRUE & fertility_type == "fertility_med" &
+                           clusters != "3"), aes(x = year)) + 
+  theme_bw() + facet_wrap(.~location, nrow = 2, scales = "free") +
+  scale_color_manual("Scenario", values = c("Senescent" = "firebrick1", "Adult_late" = "blue3", 
+                                            "Adult_early" = "cornflowerblue", "Infant" = "forestgreen", 
+                                            "Slow_10pc" = "darkgoldenrod3", "Slow_25pc" = "orange")) +
+  geom_line(aes(y = daly_diff/1e9, color = intervention)) + 
+  labs(x = "Year", y = "DALYs gained (billions)")
+
+ggarrange(glob_plt, reg_plt + ylab(""), common.legend = TRUE, widths = c(0.35, 0.65), 
+          legend = "right")
+ggsave("figures/global_dalys_overtime.pdf", width = 10, height = 4)
+
+
+baseline_results <- filter(results_df, clusters != "3" & fertility_type == "fertility_med" &
+                             growth_trans == TRUE)
+
+ggplot(filter(global_results_df,growth_trans == TRUE), aes(x = year)) + theme_bw() + 
+  facet_wrap(.~ intervention, scales = "free") +
   #geom_line(aes(y = daly_diff/1e6), color = "black") +
   geom_bar(aes(y = daly_diff/1e6, fill = "Complimentarity", group = intervention), stat = "identity") +
   geom_bar(aes(y = daly_diff_mort/1e6 + daly_diff_dis/1e6, fill = "Mortality"), stat = "identity") +
   geom_bar(aes(y = daly_diff_dis/1e6, fill = "Disability"), stat = "identity") +
-  labs(y = "Extra DALYs (millions)", x = "Year", title = "Slow aging", fill = "")
+  labs(y = "Extra DALYs (millions)", x = "Year", title = "", fill = "")
+ggsave("figures/global_dalys_compliment.pdf", width = 8, height = 4)
 
 
-
-
-ggplot(filter(results_df, location != "Global")) + theme_bw() +
-  facet_wrap(.~fertility_type) +
-  geom_bar(aes(x = intervention, y = daly_diff, fill = location), stat = "summary", fun = "sum") +
-  geom_line(data = filter(results_df, location == "Global"),
-            aes(x = intervention, y = daly_diff, color = location, group = location), stat = "summary", fun = "sum") +
+ggplot(baseline_results) + theme_bw() +
+  #facet_wrap(.~fertility_type) +
+  geom_bar(aes(x = intervention, y = daly_diff/1e9, fill = location), stat = "summary", fun = "sum") +
   scale_fill_manual("Region", values = loc_cols) + 
-  scale_color_manual("Region", values = loc_cols) + guides(color = "none") +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
-
-
-ggplot(results_df) + theme_bw() + 
+  scale_color_manual("Region", values = loc_cols) + 
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
-  geom_point(aes(x = intervention, y = daly_diff - daly_diff_dis -daly_diff_mort, color = clusters))
-table(select(results_df, c(LE_new, intervention)))
+  labs(y = "Extra DALYs (billions)", x = "Secnario", fill = "")
+ggsave("figures/global_dalys_byregion.pdf", width = 5, height = 3)
 
 
-ggplot(filter(results_df, fertility_type == "fertility_med" & clusters == 3), aes(x = year)) + theme_bw() + 
-  facet_wrap(.~location, scales = "free") + 
-  geom_line(aes(x = year, y = daly_base/1e9, color = "Baseline")) +
-  geom_line(aes(x = year, y = daly_new/1e9, color = intervention)) +
-  scale_color_manual("Scenario", values = c("Baseline" = "grey", "Senescent" = "firebrick1", 
-                                            "Adult" = "blue3", "Adult_late" = "blue3", "Adult_early" = "cornflowerblue",
-                                            "Infant" = "forestgreen", "Slow_10pc" = "darkgoldenrod3", "Slow_25pc" = "orange")) +
-  xlab("Year") + ylab("Disability-adjusted person years (billions)") + expand_limits(y=0)
-ggsave("figures/compare_daly_forecasts.pdf", width = 10, height = 6)
+
+
+
+
+plot_df <- filter(results_df,growth_trans == TRUE & clusters != "3" &
+                    fertility_type %in% c("fertility_med", "fertility_est")) %>%
+  mutate(fertility_type = case_when(fertility_type == "fertility_med"  ~ "Medium variant", 
+                                    fertility_type == "fertility_est"  ~ "2021 rates"))
+
+
+ggplot(plot_df, aes(x = year)) + theme_bw() + 
+  facet_wrap(.~fertility_type + location , nrow = 2, scales = "free") +
+  scale_color_manual("Scenario", values = c("Senescent" = "firebrick1", "Adult_late" = "blue3", 
+                                            "Adult_early" = "cornflowerblue", "Infant" = "forestgreen", 
+                                            "Slow_10pc" = "darkgoldenrod3", "Slow_25pc" = "orange")) +
+  geom_line(aes(y = daly_diff/1e9, color = intervention)) + 
+  labs(x = "Year", y = "DALYs gained (billions)")
+ggsave("figures/fertility_type_byregion.pdf", width = 12, height = 4.5)
+
 
 
 
