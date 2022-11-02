@@ -263,6 +263,18 @@ cause_tree_df <- select(cause_tree_df, c(cause_name, cause_id, level1_name, leve
   arrange(cluster3, cluster4, level1_name, level2_name, level3_name) 
 write.csv(cause_tree_df, "clean_data/cause_definitions.csv", row.names = F)
 
+infant_causes <- cause_tree_df$cause_name[which(cause_tree_df$cluster4 == "Infant")]
+adult_early_causes <- cause_tree_df$cause_name[which(cause_tree_df$cluster4 == "Adult_early")]
+adult_late_causes <- cause_tree_df$cause_name[which(cause_tree_df$cluster4 == "Adult_late")]
+senescent_causes <- cause_tree_df$cause_name[which(cause_tree_df$cluster4 == "Senescent")]
+tab_len <- max(length(infant_causes), length(adult_early_causes), length(adult_late_causes),
+               length(senescent_causes))
+cause_table <- data.frame(Infant = c(infant_causes, rep(NA,tab_len-length(infant_causes))),
+                          Adult_early = c(adult_early_causes, rep(NA,tab_len-length(adult_early_causes))),
+                          Adult_late = c(adult_late_causes, rep(NA,tab_len-length(adult_late_causes))),
+                          Senescent = c(senescent_causes, rep(NA,tab_len-length(senescent_causes))))
+stargazer(as.matrix(cause_table[1:53,]))
+stargazer(as.matrix(cause_table[54:106,]))
 
 "
 Clean GBD data
@@ -325,7 +337,8 @@ mortality3_plt <- ggplot(mortality_med_df, aes(x = age)) + theme_bw() + labs(fil
   xlab("Age") + ylab("Mortality")
 mortality3_plt
 # Plot mortality due to each cluster4
-mortality4_plt <- ggplot(mortality_med_df, aes(x = age)) + theme_bw() + labs(fill="Cluster") +
+mortality4_plt <- ggplot(filter(mortality_med_df, location != "Global"), aes(x = age)) + 
+  theme_bw() + labs(fill="Cluster") +
   scale_fill_manual("Cluster", values = cluster4_colors) +
   geom_bar(aes(y = (mortality_infant4+mortality_adult_early4+mortality_adult_late4
                     +mortality_senescent4)/100000, fill = "Senescent"), stat = "identity") +
@@ -335,7 +348,7 @@ mortality4_plt <- ggplot(mortality_med_df, aes(x = age)) + theme_bw() + labs(fil
                fill = "Adult_early"), stat = "identity") +
   geom_bar(aes(y = mortality_infant4/100000, fill = "Infant"), stat = "identity") + 
   geom_line(aes(y = mortality/100000)) + facet_wrap(.~location) +
-  theme(legend.position = c(1, 0), legend.justification = c(1, 0)) +
+  #theme(legend.position = c(1, 0), legend.justification = c(1, 0)) +
   xlab("Age") + ylab("Mortality")
 mortality4_plt
 
@@ -414,7 +427,8 @@ health3_plt <- ggplot(health_med_df, aes(x = age)) + theme_bw() + labs(fill="Clu
   xlab("Age") + ylab("Disability")
 health3_plt
 # Plot disability due to each cluster4
-health4_plt <- ggplot(health_med_df, aes(x = age)) + theme_bw() + labs(fill="Cluster") +
+health4_plt <- ggplot(filter(health_med_df, location != "Global"), aes(x = age)) + 
+  theme_bw() + labs(fill="Cluster") +
   scale_fill_manual("Cluster", values = cluster4_colors) +
   geom_bar(aes(y = (disability_infant4+disability_adult_early4+disability_adult_late4
                     +disability_senescent4)/100000, fill = "Senescent"), stat = "identity") +
@@ -424,7 +438,7 @@ health4_plt <- ggplot(health_med_df, aes(x = age)) + theme_bw() + labs(fill="Clu
                fill = "Adult_early"), stat = "identity") +
   geom_bar(aes(y = disability_infant4/100000, fill = "Infant"), stat = "identity") + 
   geom_line(aes(y = disability/100000)) + facet_wrap(.~location) +
-  theme(legend.position = c(1, 0), legend.justification = c(1, 0)) +
+  #theme(legend.position = c(1, 0), legend.justification = c(1, 0)) +
   xlab("Age") + ylab("Disability")
 health4_plt
 
@@ -468,7 +482,10 @@ ggarrange(mortality3_plt, mortality4_plt, ncol = 2, common.legend = F)
 ggsave("figures/mortality_by_cluster.pdf", width = 15, height = 5)
 ggarrange(health3_plt, health4_plt, ncol = 2, common.legend = F, legend = "right")
 ggsave("figures/disability_by_cluster.pdf", width = 15, height = 5)
-
+ggarrange(mortality4_plt + ggtitle("Mortailty") + ylab(""), 
+          health4_plt + ggtitle("Disability") + ylab(""), 
+          ncol = 2, common.legend = T, legend = "right")
+ggsave("figures/rates_by_cluster.pdf", width = 12, height = 5)
 
 
 

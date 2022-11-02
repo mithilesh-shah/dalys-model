@@ -49,10 +49,10 @@ end_year <- 2122
 end_age <- 100
 no_births <- FALSE
 fertility_type <- "fertility_med"
-growth_transitions <- TRUE
+growth_transitions <- FALSE
 
 
-loc_name <- locations[3]
+loc_name <- locations[1]
 # Select which region to focus on and which years to use as a starting point
 population_df <- filter(all_population_df, location == loc_name)
 fertility_df <- filter(all_fertility_df, location == loc_name, year >= start_year)
@@ -179,7 +179,7 @@ forecasts_infant <- forecast_dalys(population_df, fertility_df, mortality_df, di
                                    growth_transitions = growth_transitions)
 infant4_plt <- ggplot(filter(forecasts_infant, year%%10 == 0), aes(x = age)) + theme_bw() +
   geom_line(aes(y = population/1e6, group = as.character(year), color = year)) + 
-  labs(color = "Year") + xlab("Age") + ylab("Population (millions)") + ggtitle("Infant diseases")
+  labs(color = "Year") + xlab("Age") + ylab("Population (millions)") + ggtitle("Infant")
 
 # Compare to benchmark
 dalys_infant4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
@@ -239,7 +239,7 @@ forecasts_adult <- forecast_dalys(population_df, fertility_df, mortality_df, dis
                                   growth_transitions = growth_transitions) 
 adult_early4_plt <- ggplot(filter(forecasts_adult, year%%10 == 0), aes(x = age)) + theme_bw() +
   geom_line(aes(y = population/1e6, group = as.character(year), color = year)) +
-  labs(color = "Year") + xlab("Age") + ylab("") + ggtitle("Adult (early) diseases")
+  labs(color = "Year") + xlab("Age") + ylab("") + ggtitle("Adult (early)")
 # Compare to benchmark
 dalys_adult_early4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
                                   start_year = start_year, end_year = end_year, no_births = no_births,
@@ -269,7 +269,7 @@ forecasts_adult <- forecast_dalys(population_df, fertility_df, mortality_df, dis
                                   growth_transitions = growth_transitions) 
 adult_late4_plt <- ggplot(filter(forecasts_adult, year%%10 == 0), aes(x = age)) + theme_bw() +
   geom_line(aes(y = population/1e6, group = as.character(year), color = year)) +
-  labs(color = "Year") + xlab("Age") + ylab("") + ggtitle("Adult (late) diseases")
+  labs(color = "Year") + xlab("Age") + ylab("") + ggtitle("Adult (late)")
 # Compare to benchmark
 dalys_adult_late4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
                                         start_year = start_year, end_year = end_year, no_births = no_births,
@@ -325,7 +325,7 @@ forecasts_senescent <- forecast_dalys(population_df, fertility_df, mortality_df,
                                       growth_transitions = growth_transitions)
 senescent4_plt <- ggplot(filter(forecasts_senescent, year%%10 == 0), aes(x = age)) + theme_bw() +
   geom_line(aes(y = population/1e6, group = as.character(year), color = year)) + 
-  labs(color = "Year") + xlab("Age") + ylab("") + ggtitle("Senescent diseases")
+  labs(color = "Year") + xlab("Age") + ylab("") + ggtitle("Senescent")
 # Compare to benchmark
 dalys_senescent4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
                                       start_year = start_year, end_year = end_year, no_births = no_births,
@@ -373,8 +373,12 @@ Compare removing the different clusters
 ggarrange(base_plt, infant3_plt, adult3_plt, senescent3_plt, nrow = 1, 
           common.legend = TRUE, legend = "right", align = "hv")
 ggsave("figures/compare_pop_forecasts_cluster3.pdf", width = 12, height = 4)
-ggarrange(base_plt, infant4_plt, adult_early4_plt, adult_late4_plt, senescent4_plt, nrow = 1, 
-          common.legend = TRUE, legend = "right", align = "hv")
+ggarrange(base_plt + ylim(c(0,270)), 
+          infant4_plt + ylim(c(0,270)), 
+          adult_early4_plt + ylim(c(0,270)), 
+          adult_late4_plt + ylim(c(0,270)), 
+          senescent4_plt + ylim(c(0,270)), 
+          nrow = 1, common.legend = TRUE, legend = "right", align = "hv")
 ggsave("figures/compare_pop_forecasts_cluster4.pdf", width = 15, height = 4)
 # Decomposition of gains
 ggarrange(decomp_infant3, decomp_adult3+ylab(""), decomp_senescent3+ylab(""), decomp_slow+ylab(""), nrow = 1, 
