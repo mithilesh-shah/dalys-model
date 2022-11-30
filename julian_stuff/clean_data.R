@@ -126,24 +126,14 @@ ggplot(filter(fertility_df, location == "World Bank Low Income")) + theme_bw() +
 "
 Clean population data
 "
-population_df <- as.data.frame(read_xlsx("raw_data/WPP2022_POPULATION_SINGLE_AGE_BOTH_SEXES.xlsx",
-                                        sheet = "Estimates", skip = 16))
+population_df <- read_xlsx("raw_data/WPP2022_POPULATION_SINGLE_AGE_BOTH_SEXES.xlsx",
+                                        sheet = "Estimates", skip = 16)
 
 population_df <- population_df %>%
   rename(location = `Region, subregion, country or area *`, 
          type = Type, year = Year, `100` = `100+`) %>%
   filter(!is.na(year)) %>%
-  select(c(location, type, year, 
-           `0`, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`, 
-           `10`, `11`, `12`, `13`, `14`, `15`, `16`, `17`, `18`, `19`, 
-           `20`, `21`, `22`, `23`, `24`, `25`, `26`, `27`, `28`, `29`, 
-           `30`, `31`, `32`, `33`, `34`, `35`, `36`, `37`, `38`, `39`,
-           `40`, `41`, `42`, `43`, `44`, `45`, `46`, `47`, `48`, `49`,
-           `50`, `51`, `52`, `53`, `54`, `55`, `56`, `57`, `58`, `59`,
-           `60`, `61`, `62`, `63`, `64`, `65`, `66`, `67`, `68`, `69`,
-           `70`, `71`, `72`, `73`, `74`, `75`, `76`, `77`, `78`, `79`,
-           `80`, `81`, `82`, `83`, `84`, `85`, `86`, `87`, `88`, `89`,
-           `90`, `91`, `92`, `93`, `94`, `95`, `96`, `97`, `98`, `99`, `100`)) %>%
+  select(c(location, type, year, `0`:`100`)) %>%
   mutate_at(vars(-location, -type), as.numeric) %>%
   pivot_longer(cols = -c(location, type, year), names_to = "age", values_to = "population") %>%
   mutate(age = as.numeric(age)) %>% 
@@ -225,6 +215,8 @@ GBD disease hierarchy
 "
 gbd_new_df <- read.csv("raw_data/IHME-GBD_2019_DATA_WB_income_region.csv", stringsAsFactors = F) %>%
   filter(!str_detect(cause_name, "Total"))
+gbd_new_df <- read.csv("/Users/julianashwin/Documents/Research/DALYs/gbd_final.csv") %>%
+  filter(!str_detect(cause_name, "Total"))
 gbd_hierarchy_df <- as.data.frame(read_xlsx("raw_data/IHME_GBD_2019_HIERARCHIES.xlsx", 
                                             sheet = "Cause Hierarchy")) 
 names(gbd_hierarchy_df) <- str_replace_all(tolower(names(gbd_hierarchy_df)), " ", "_")
@@ -262,7 +254,8 @@ cause_tree_df <- select(cause_tree_df, c(cause_name, cause_id, level1_name, leve
   full_join(cluster4_key, by = "cause_name") %>%
   arrange(cluster3, cluster4, level1_name, level2_name, level3_name) 
 write.csv(cause_tree_df, "clean_data/cause_definitions.csv", row.names = F)
-
+#cause_tree_df <- read.csv("clean_data/cause_definitions.csv")
+  
 infant_causes <- cause_tree_df$cause_name[which(cause_tree_df$cluster4 == "Infant")]
 adult_early_causes <- cause_tree_df$cause_name[which(cause_tree_df$cluster4 == "Adult_early")]
 adult_late_causes <- cause_tree_df$cause_name[which(cause_tree_df$cluster4 == "Adult_late")]
@@ -279,12 +272,14 @@ stargazer(as.matrix(cause_table[54:106,]))
 "
 Clean GBD data
 "
-gbd_df <- filter(gbd_new_df, measure_id %in% c(1,3)) %>%
+gbd_df <- 
+  as_tibble(gbd_new_df) %>%
+  filter(measure_id %in% c(1,3)) %>%
   mutate(measure_name = str_replace(measure_name, "YLDs \\(Years Lived with Disability\\)", "YLDs")) %>%
   mutate(age_name = str_replace(age_name, "<1 year", "0-1 years")) %>%
   mutate(age_name = str_replace(age_name, "95\\+ years", "95-99 years")) %>%
   mutate(age_low = as.numeric(str_sub(age_name, 1, str_locate(age_name, "-")[,"start"]-1))) %>%
-  select(measure_name, location_name, sex_name, age_name, age_low, cause_name, cause_id, val, upper, lower) %>%
+  select(measure_name, year, location_name, sex_name, age_name, age_low, cause_name, cause_id, val, upper, lower) %>%
   full_join(cause_tree_df, by = c("cause_name", "cause_id"))
   
 
@@ -294,18 +289,20 @@ Mortality for medium, lower and upper variants
 "
 locations = unique(gbd_df$location_name)
 ages = 0:100
-fill_df <- data.frame(location_name = rep(locations, length(ages)), 
-                      age_low = rep(ages, length(locations)))
+years = 1990:2019
+fill_df <- crossing(years, locations, ages) %>%
+  rename(year = years, location_name = locations, age_low = ages)
 ## Medium
-mortality_med_df <- filter(gbd_df, measure_name == "Deaths") %>%
+mortality_med_df <- gbd_df %>%
+  filter(measure_name == "Deaths") %>%
   select(-measure_name, -upper, -lower) %>%
-  pivot_wider(id_cols = c(location_name, sex_name, age_name, age_low), names_from = cause_name, 
+  pivot_wider(id_cols = c(year, location_name, sex_name, age_name, age_low), names_from = cause_name, 
               values_from = val, values_fill = 0) %>%
-  arrange(location_name, age_low) %>% rowwise() %>%
-  mutate(mortality = sum(c_across(`Larynx cancer`:`Alcoholic cardiomyopathy`))) %>%
+  arrange(year, location_name, age_low) %>% rowwise() %>%
+  mutate(mortality = sum(c_across(`HIV/AIDS resulting in other diseases`:`Alcoholic cardiomyopathy`))) %>%
   relocate(mortality, .after = age_low) %>%
-  full_join(fill_df, by = c("location_name","age_low")) %>% ungroup() %>%
-  arrange(location_name, age_low) %>% 
+  full_join(fill_df, by = c("year", "location_name","age_low")) %>% ungroup() %>%
+  arrange(year, location_name, age_low) %>% 
   rename(age = age_low, location = location_name) %>%
   fill(!age_name, .direction = "down")
 write.csv(mortality_med_df, "clean_data/mortality_medium.csv", row.names = F)
@@ -326,18 +323,22 @@ mortality_med_df$mortality_adult_late4 <- rowSums(mortality_med_df[,which(names(
 mortality_med_df$mortality_senescent4 <- rowSums(mortality_med_df[,which(names(mortality_med_df) %in% 
     cause_tree_df$cause_name[which(cause_tree_df$cluster4 == "Senescent")])])
 # Plot mortality due to each cluster3
-mortality3_plt <- ggplot(mortality_med_df, aes(x = age)) + theme_bw() + labs(fill="Cluster") +
+mortality3_plt <- mortality_med_df %>%
+  filter(year == 2019) %>%
+  ggplot(aes(x = age)) + theme_bw() + labs(fill="Cluster") + facet_wrap(~location) + 
   scale_fill_manual("Cluster", values = cluster3_colors) +
   geom_bar(aes(y = (mortality_infant3+mortality_adult3+mortality_senescent3)/100000, 
                fill = "Senescent"), stat = "identity") +
   geom_bar(aes(y = (mortality_infant3+mortality_adult3)/100000, fill = "Adult"), stat = "identity") +
   geom_bar(aes(y = mortality_infant3/100000, fill = "Infant"), stat = "identity") + 
-  geom_line(aes(y = mortality/100000)) + facet_wrap(.~location) +
+  geom_line(aes(y = mortality/100000)) + 
   theme(legend.position = c(1, 0), legend.justification = c(1, 0)) +
   xlab("Age") + ylab("Mortality")
 mortality3_plt
 # Plot mortality due to each cluster4
-mortality4_plt <- ggplot(filter(mortality_med_df, location != "Global"), aes(x = age)) + 
+mortality4_plt <- mortality_med_df %>%
+  filter(year == 2019 & location != "Global") %>%
+  ggplot(aes(x = age)) + 
   theme_bw() + labs(fill="Cluster") +
   scale_fill_manual("Cluster", values = cluster4_colors) +
   geom_bar(aes(y = (mortality_infant4+mortality_adult_early4+mortality_adult_late4
@@ -356,13 +357,13 @@ mortality4_plt
 ## Lower
 mortality_low_df <- filter(gbd_df, measure_name == "Deaths") %>%
   select(-measure_name, -upper, -val) %>%
-  pivot_wider(id_cols = c(location_name, sex_name, age_name, age_low), names_from = cause_name, 
+  pivot_wider(id_cols = c(year, location_name, sex_name, age_name, age_low), names_from = cause_name, 
               values_from = lower, values_fill = 0) %>%
-  arrange(location_name, age_low) %>% rowwise() %>%
-  mutate(mortality = sum(c_across(`Larynx cancer`:`Alcoholic cardiomyopathy`))) %>%
+  arrange(year, location_name, age_low) %>% rowwise() %>%
+  mutate(mortality = sum(c_across(`HIV/AIDS resulting in other diseases`:`Alcoholic cardiomyopathy`))) %>%
   relocate(mortality, .after = age_low)  %>%
-  full_join(fill_df, by = c("location_name","age_low")) %>% ungroup() %>%
-  arrange(location_name, age_low) %>% 
+  full_join(fill_df, by = c("year", "location_name","age_low")) %>% ungroup() %>%
+  arrange(year, location_name, age_low) %>% 
   rename(age = age_low, location = location_name) %>%
   fill(!age_name, .direction = "down")
 # Save
@@ -371,13 +372,13 @@ write.csv(mortality_low_df, "clean_data/mortality_low.csv", row.names = F)
 ## Upper
 mortality_up_df <- filter(gbd_df, measure_name == "Deaths") %>%
   select(-measure_name, -lower, -val) %>%
-  pivot_wider(id_cols = c(location_name, sex_name, age_name, age_low), names_from = cause_name, 
+  pivot_wider(id_cols = c(year, location_name, sex_name, age_name, age_low), names_from = cause_name, 
               values_from = upper, values_fill = 0) %>%
-  arrange(location_name, age_low) %>% rowwise() %>%
-  mutate(mortality = sum(c_across(`Larynx cancer`:`Alcoholic cardiomyopathy`))) %>%
+  arrange(year, location_name, age_low) %>% rowwise() %>%
+  mutate(mortality = sum(c_across(`HIV/AIDS resulting in other diseases`:`Alcoholic cardiomyopathy`))) %>%
   relocate(mortality, .after = age_low) %>%
-  full_join(fill_df, by = c("location_name","age_low")) %>% ungroup() %>%
-  arrange(location_name, age_low) %>% 
+  full_join(fill_df, by = c("year", "location_name","age_low")) %>% ungroup() %>%
+  arrange(year, location_name, age_low) %>% 
   rename(age = age_low, location = location_name) %>%
   fill(!age_name, .direction = "down")
 # Save
@@ -390,13 +391,13 @@ Disability for medium, lower and upper variants
 ## Medium
 health_med_df <- filter(gbd_df, measure_name == "YLDs") %>%
   select(-measure_name, -upper, -lower) %>%
-  pivot_wider(id_cols = c(location_name, sex_name, age_name, age_low), names_from = cause_name, 
+  pivot_wider(id_cols = c(year, location_name, sex_name, age_name, age_low), names_from = cause_name, 
               values_from = val, values_fill = 0) %>%
-  arrange(location_name, age_low) %>% rowwise() %>%
-  mutate(disability = sum(c_across(`Conduct disorder`:`Attention-deficit/hyperactivity disorder`))) %>%
+  arrange(year, location_name, age_low) %>% rowwise() %>%
+  mutate(disability = sum(c_across(`Chagas disease`:`Down syndrome`))) %>%
   relocate(disability, .after = age_low) %>%
-  full_join(fill_df, by = c("location_name","age_low")) %>% ungroup() %>%
-  arrange(location_name, age_low) %>% 
+  full_join(fill_df, by = c("year", "location_name","age_low")) %>% ungroup() %>%
+  arrange(year, location_name, age_low) %>% 
   rename(age = age_low, location = location_name) %>%
   fill(!age_name, .direction = "down")
 write.csv(health_med_df, "clean_data/disability_medium.csv", row.names = F)
@@ -416,7 +417,9 @@ health_med_df$disability_adult_late4 <- rowSums(health_med_df[,which(names(healt
 health_med_df$disability_senescent4 <- rowSums(health_med_df[,which(names(health_med_df) %in% 
     cause_tree_df$cause_name[which(cause_tree_df$cluster4 == "Senescent")])])
 # Plot disability due to each cluster3
-health3_plt <- ggplot(health_med_df, aes(x = age)) + theme_bw() + labs(fill="Cluster") +
+health3_plt <- health_med_df %>%
+  filter(year == 2019 & location != "Global") %>%
+  ggplot(aes(x = age)) + theme_bw() + labs(fill="Cluster") +
   scale_fill_manual("Cluster", values = cluster3_colors) +
   geom_bar(aes(y = (disability_infant3+disability_adult3+disability_senescent3)/100000, 
                fill = "Senescent"), stat = "identity") +
@@ -427,7 +430,9 @@ health3_plt <- ggplot(health_med_df, aes(x = age)) + theme_bw() + labs(fill="Clu
   xlab("Age") + ylab("Disability")
 health3_plt
 # Plot disability due to each cluster4
-health4_plt <- ggplot(filter(health_med_df, location != "Global"), aes(x = age)) + 
+health4_plt <- health_med_df %>%
+  filter(year == 2019 & location != "Global") %>%
+  ggplot(aes(x = age)) + 
   theme_bw() + labs(fill="Cluster") +
   scale_fill_manual("Cluster", values = cluster4_colors) +
   geom_bar(aes(y = (disability_infant4+disability_adult_early4+disability_adult_late4
@@ -445,13 +450,13 @@ health4_plt
 # Lower
 health_low_df <- filter(gbd_df, measure_name == "YLDs") %>%
   select(-measure_name, -val, -upper) %>%
-  pivot_wider(id_cols = c(location_name, sex_name, age_name, age_low), names_from = cause_name, 
+  pivot_wider(id_cols = c(year, location_name, sex_name, age_name, age_low), names_from = cause_name, 
               values_from = lower, values_fill = 0) %>%
-  arrange(location_name, age_low) %>% rowwise() %>%
-  mutate(disability = sum(c_across(`Conduct disorder`:`Attention-deficit/hyperactivity disorder`))) %>%
+  arrange(year, location_name, age_low) %>% rowwise() %>%
+  mutate(disability = sum(c_across(`Chagas disease`:`Down syndrome`))) %>%
   relocate(disability, .after = age_low) %>%
-  full_join(fill_df, by = c("location_name","age_low")) %>% ungroup() %>%
-  arrange(location_name, age_low) %>% 
+  full_join(fill_df, by = c("year", "location_name","age_low")) %>% ungroup() %>%
+  arrange(year, location_name, age_low) %>% 
   rename(age = age_low, location = location_name) %>%
   fill(!age_name, .direction = "down")
 # Save
@@ -460,13 +465,13 @@ write.csv(health_low_df, "clean_data/disability_low.csv", row.names = F)
 # Upper
 health_up_df <- filter(gbd_df, measure_name == "YLDs") %>%
   select(-measure_name, -lower, -val) %>%
-  pivot_wider(id_cols = c(location_name, sex_name, age_name, age_low), names_from = cause_name, 
+  pivot_wider(id_cols = c(year, location_name, sex_name, age_name, age_low), names_from = cause_name, 
               values_from = upper, values_fill = 0) %>%
-  arrange(location_name, age_low) %>% rowwise() %>%
-  mutate(disability = sum(c_across(`Conduct disorder`:`Attention-deficit/hyperactivity disorder`))) %>%
+  arrange(year, location_name, age_low) %>% rowwise() %>%
+  mutate(disability = sum(c_across(`Chagas disease`:`Down syndrome`))) %>%
   relocate(disability, .after = age_low) %>%
-  full_join(fill_df, by = c("location_name","age_low")) %>% ungroup() %>%
-  arrange(location_name, age_low) %>% 
+  full_join(fill_df, by = c("year", "location_name","age_low")) %>% ungroup() %>%
+  arrange(year, location_name, age_low) %>% 
   rename(age = age_low, location = location_name) %>%
   fill(!age_name, .direction = "down")
 # Save
@@ -497,7 +502,7 @@ Get GNI per capita for each country in each region
 loc_cols <- c("World Bank High Income" = "forestgreen", "World Bank Upper Middle Income" = "green", 
               "World Bank Lower Middle Income" = "orange", "World Bank Low Income" = "red")
 
-classification_data <- read_xlsx("/Users/julianashwin/Downloads/WDIEXCEL.xlsx", sheet = "Country") %>%
+classification_data <- read_xlsx("raw_data/WDIEXCEL.xlsx", sheet = "Country") %>%
   filter(!is.na(`Income Group`)) %>%
   select(`Country Code`, `Table Name`, `Income Group`) %>%
   rename(name = `Table Name`, code = `Country Code`, income_group = `Income Group`) %>%
@@ -508,7 +513,7 @@ classification_data <- read_xlsx("/Users/julianashwin/Downloads/WDIEXCEL.xlsx", 
 country_codes <- unique(classification_data$code)
 
 
-macro_data_in <- read_xlsx("/Users/julianashwin/Downloads/WDIEXCEL.xlsx", sheet = "Data")
+macro_data_in <- read_xlsx("raw_data/WDIEXCEL.xlsx", sheet = "Data")
   
 macro_data <- macro_data_in %>%
   filter(`Indicator Code` %in% c("NY.GNP.PCAP.CD", "SP.POP.TOTL")) %>%

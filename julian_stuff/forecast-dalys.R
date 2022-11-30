@@ -13,13 +13,13 @@ source("functions.R")
 
 
 # Import data 
-all_fertility_df <- read.csv("clean_data/fertility_rates.csv",stringsAsFactors = F)
-all_population_df <- read.csv("clean_data/population.csv",stringsAsFactors = F)
-all_mortality_df <- read.csv("clean_data/mortality_medium.csv",stringsAsFactors = F, check.names=F)
-all_disability_df <- read.csv("clean_data/disability_medium.csv",stringsAsFactors = F, check.names=F)
-cause_tree_df <- read.csv("clean_data/cause_definitions.csv", stringsAsFactors = F)
-income_transition_df <- read.csv("clean_data/income_transition_shares.csv", 
-                                 stringsAsFactors = F, check.names=F)
+all_fertility_df <- as_tibble(read.csv("clean_data/fertility_rates.csv",stringsAsFactors = F))
+all_population_df <- as_tibble(read.csv("clean_data/population.csv",stringsAsFactors = F))
+all_mortality_df <- as_tibble(read.csv("clean_data/mortality_medium.csv",stringsAsFactors = F, check.names=F))
+all_disability_df <- as_tibble(read.csv("clean_data/disability_medium.csv",stringsAsFactors = F, check.names=F))
+cause_tree_df <- as_tibble(read.csv("clean_data/cause_definitions.csv", stringsAsFactors = F))
+income_transition_df <- as_tibble(read.csv("clean_data/income_transition_shares.csv", 
+                                 stringsAsFactors = F, check.names=F))
 
 locations <- unique(all_mortality_df$location)
 
@@ -32,13 +32,17 @@ fert_plt <- ggplot(filter(all_fertility_df, location %in% locations & year >= 20
   geom_line(aes(x = age, y = fertility_med, color = location, group = interaction(year, location)), 
             linetype = "dashed", alpha = 0.2) + 
   scale_color_manual(values = loc_cols) + labs(x = "Age", y = "Fertility", color = "Region")
-pop_plt <- ggplot(filter(all_population_df, location %in% locations & year == 2021)) + theme_bw() +
-  geom_line(aes(x = age, y = population, color = location)) + 
+pop_plt <- ggplot(filter(all_population_df, location %in% locations & year <= 2021 & year >= 1990)) + theme_bw() +
+  geom_line(aes(x = age, y = population, color = location, group = interaction(year, location))) + 
   scale_color_manual(values = loc_cols) + labs(x = "Age", y = "Population", color = "Region")
-mort_plt <- ggplot(filter(all_mortality_df, location %in% locations)) + theme_bw() +
+mort_plt <- all_mortality_df %>%
+  filter(location %in% locations & year == 2019) %>%
+  ggplot() + theme_bw() +
   geom_line(aes(x = age, y = mortality/100000, color = location)) + 
   scale_color_manual(values = loc_cols) + labs(x = "Age", y = "Mortality", color = "Region")
-disab_plt <- ggplot(filter(all_disability_df, location %in% locations)) + theme_bw() +
+disab_plt <- all_disability_df %>%
+  filter(location %in% locations & year == 2019) %>%
+  ggplot() + theme_bw() +
   geom_line(aes(x = age, y = disability/100000, color = location)) + 
   scale_color_manual(values = loc_cols) + labs(x = "Age", y = "Disability", color = "Region")
 ggarrange(fert_plt, pop_plt, mort_plt, disab_plt, common.legend = T, nrow =1, legend = "right")
@@ -57,11 +61,12 @@ loc_name <- locations[1]
 population_df <- filter(all_population_df, location == loc_name)
 fertility_df <- filter(all_fertility_df, location == loc_name, year >= start_year)
 mortality_df <- create_mortality_df(all_mortality_df, loc_name = loc_name, start_year = start_year, end_year = end_year, 
-                                    end_age = end_age, growth_transitions = growth_transitions, 
+                                    end_age = end_age, growth_transitions = TRUE, 
                                     income_transition_df = income_transition_df)
 disability_df <- create_disability_df(all_disability_df, loc_name = loc_name, start_year = start_year, end_year = end_year, 
-                                    end_age = end_age, growth_transitions = growth_transitions, 
+                                    end_age = end_age, growth_transitions = TRUE, 
                                     income_transition_df = income_transition_df)
+
 
 
 "

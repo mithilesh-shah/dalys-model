@@ -4,12 +4,21 @@ Create dataframe with mortlaity rates for each year
 create_mortality_df <- function(all_mortality_df, loc_name = "Global", start_year = 2021, 
                                 end_year = 2100, end_age = 100, growth_transitions = FALSE, 
                                 income_transition_df = NULL){
-  mortality_df <- filter(all_mortality_df, location == loc_name) %>%
-    mutate(year = start_year) %>%
+  if (start_year > 2019){
+    all_mortality_df <- all_mortality_df %>%
+      filter(year = 2019) %>%
+      mutate(year = start_year)
+  }
+  mortality_df <- all_mortality_df %>%
+    filter(location == loc_name) %>%
     relocate(year, .after = location) %>%
     full_join(crossing(year = start_year:end_year, age = 0:end_age)) %>%
     arrange(location, year, age) %>%
-    fill(location, .direction = "down")
+    fill(location, .direction = "down") %>%
+    group_by(location, age) %>% 
+    fill(names(all_mortality_df)) %>% 
+    ungroup()
+  
   
   if (growth_transitions){
     stopifnot(loc_name %in% income_transition_df$income_group)
@@ -20,24 +29,21 @@ create_mortality_df <- function(all_mortality_df, loc_name = "Global", start_yea
     cause_names <- names(select(all_mortality_df, mortality:last_col()))
     
     # Loop through years
-    pb <- txtProgressBar(min = start_year+1, max = end_year)
-    for (yy in (start_year+1):end_year){
+    pb <- txtProgressBar(min = max(start_year, 2021)+1, max = end_year)
+    for (yy in (max(start_year, 2021)+1):end_year){
       yy_obs <- which(mortality_df$year == yy)
       mortality_df[yy_obs,cause_names] <- 0
       trans_props <- transitions_df[which(transitions_df$year == yy),group_names]
       # Add contribution from each income groups rates
       for (gg in group_names){
-        add_rates <- trans_props[1,gg]*as.matrix(all_mortality_df[which(all_mortality_df$location == gg),cause_names])
-        mortality_df[yy_obs,cause_names] <- mortality_df[yy_obs,cause_names] + add_rates
+        add_rates <- as.numeric(trans_props[1,gg])*as.matrix(all_mortality_df[which(
+          all_mortality_df$location == gg & all_mortality_df$year == max(all_mortality_df$year)),cause_names])
+        mortality_df[yy_obs,cause_names] <- mortality_df[yy_obs,cause_names] + as.matrix(add_rates)
       }
       setTxtProgressBar(pb, yy)
     }
-  } else {
-    mortality_df <- mortality_df %>%
-      group_by(location, age) %>% 
-      fill(names(mortality_df)) %>% 
-      ungroup()
-  }
+  } 
+  
   return(mortality_df)
 }
 
@@ -50,12 +56,20 @@ Create dataframe with mortlaity rates for each year
 create_disability_df <- function(all_disability_df, loc_name = "Global", start_year = 2021, 
                                 end_year = 2100, end_age = 100, growth_transitions = FALSE, 
                                 income_transition_df = NULL){
-  disability_df <- filter(all_disability_df, location == loc_name) %>%
-    mutate(year = start_year) %>%
+  if (start_year > 2019){
+    all_disability_df <- all_disability_df %>%
+      filter(year = 2019) %>%
+      mutate(year = start_year)
+  }
+  disability_df <- all_disability_df %>%
+    filter(location == loc_name) %>%
     relocate(year, .after = location) %>%
     full_join(crossing(year = start_year:end_year, age = 0:end_age)) %>%
     arrange(location, year, age) %>%
-    fill(location, .direction = "down")
+    fill(location, .direction = "down") %>%
+    group_by(location, age) %>% 
+    fill(names(all_disability_df)) %>% 
+    ungroup()
   
   if (growth_transitions){
     stopifnot(loc_name %in% income_transition_df$income_group)
@@ -66,24 +80,21 @@ create_disability_df <- function(all_disability_df, loc_name = "Global", start_y
     cause_names <- names(select(all_disability_df, disability:last_col()))
     
     # Loop through years
-    pb <- txtProgressBar(min = start_year+1, max = end_year)
-    for (yy in (start_year+1):end_year){
+    pb <- txtProgressBar(min = max(start_year, 2021)+1, max = end_year)
+    for (yy in (max(start_year, 2021)+1):end_year){
       yy_obs <- which(disability_df$year == yy)
       disability_df[yy_obs,cause_names] <- 0
       trans_props <- transitions_df[which(transitions_df$year == yy),group_names]
       # Add contribution from each income groups rates
       for (gg in group_names){
-        add_rates <- trans_props[1,gg]*as.matrix(all_disability_df[which(all_disability_df$location == gg),cause_names])
-        disability_df[yy_obs,cause_names] <- disability_df[yy_obs,cause_names] + add_rates
+        add_rates <- as.numeric(trans_props[1,gg])*as.matrix(all_disability_df[which(
+          all_disability_df$location == gg & all_disability_df$year == max(all_disability_df$year)),cause_names])
+        disability_df[yy_obs,cause_names] <- disability_df[yy_obs,cause_names] + as.matrix(add_rates)
       }
       setTxtProgressBar(pb, yy)
     }
-  } else {
-    disability_df <- disability_df %>%
-      group_by(location, age) %>% 
-      fill(names(disability_df)) %>% 
-      ungroup()
-  }
+  } 
+  
   return(disability_df)
 }
 
@@ -192,17 +203,17 @@ forecast_dalys <- function(population_df, fertility_df, mortality_df, disability
                          no_births = FALSE, fertility_type = "fertility_est", 
                          growth_transitions = FALSE){
   # Set fertility rates according to fertility_type
-  fertility_df$fertility <- fertility_df[,fertility_type]
+  fertility_df <- add_column(fertility_df, fertility =  as.numeric(unlist(fertility_df[,fertility_type])))
   # If not using growth transitions, just use start_year data
   if (!growth_transitions){
     mortality_df <- filter(mortality_df, year == start_year) %>%
-      full_join(crossing(year = start_year:end_year, age = 0:end_age)) %>%
+      full_join(crossing(year = start_year:end_year, age = 0:end_age), by = c("year", "age")) %>%
       arrange(location, year, age) %>% fill(location, .direction = "down") %>% 
       group_by(location, age) %>% fill(names(mortality_df)) %>% 
       ungroup()
     
     disability_df <- filter(disability_df, year == start_year) %>%
-      full_join(crossing(year = start_year:end_year, age = 0:end_age)) %>%
+      full_join(crossing(year = start_year:end_year, age = 0:end_age), by = c("year", "age")) %>%
       arrange(location, year, age) %>% fill(location, .direction = "down") %>% 
       group_by(location, age) %>% fill(names(disability_df)) %>% 
       ungroup()
@@ -227,9 +238,9 @@ forecast_dalys <- function(population_df, fertility_df, mortality_df, disability
     select(year, age, population) %>%
     full_join(crossing(year = start_year:end_year, age = 0:end_age), by = c("year", "age")) %>%
     arrange(year, age) %>%
-    full_join(select(mortality_df, c(year, age, mortality)), by = c("year", "age")) %>%
-    full_join(select(disability_df, c(year, age, disability)), by = c("year", "age")) %>%
-    full_join(select(fertility_df, c(year, age, fertility)), by = c("year", "age")) %>%
+    left_join(select(mortality_df, c(year, age, mortality)), by = c("year", "age")) %>%
+    left_join(select(disability_df, c(year, age, disability)), by = c("year", "age")) %>%
+    left_join(select(fertility_df, c(year, age, fertility)), by = c("year", "age")) %>%
     arrange(age, year) %>% 
     group_by(age) %>% fill(fertility, .direction = "down") %>% ungroup() %>%
     mutate(fertility = replace_na(fertility, 0)) %>%
