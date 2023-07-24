@@ -53,10 +53,10 @@ end_year <- 2122
 end_age <- 100
 no_births <- FALSE
 fertility_type <- "fertility_med"
-growth_transitions <- FALSE
+growth_transitions <- TRUE
 
 
-loc_name <- locations[1]
+loc_name <- locations[2]
 # Select which region to focus on and which years to use as a starting point
 population_df <- filter(all_population_df, location == loc_name)
 fertility_df <- filter(all_fertility_df, location == loc_name, year >= start_year)

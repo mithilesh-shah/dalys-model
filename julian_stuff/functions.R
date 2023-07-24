@@ -6,7 +6,7 @@ create_mortality_df <- function(all_mortality_df, loc_name = "Global", start_yea
                                 income_transition_df = NULL){
   if (start_year > 2019){
     all_mortality_df <- all_mortality_df %>%
-      filter(year = 2019) %>%
+      filter(year == 2019) %>%
       mutate(year = start_year)
   }
   mortality_df <- all_mortality_df %>%
