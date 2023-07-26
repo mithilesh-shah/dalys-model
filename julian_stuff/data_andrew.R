@@ -87,7 +87,7 @@ unique(df$location_name)[!(unique(df$location_name) %in% classification_data$loc
 
 
 
-df %>%
+df_out <- df %>%
   inner_join(cluster4_df) %>%
   inner_join(classification_data) %>%
   inner_join(pop_df) %>%
@@ -95,8 +95,30 @@ df %>%
   summarise(val = sum(val), upper = sum(upper), lower = sum(lower)) %>%
   mutate(measure = str_sub(measure_name, 1, 4)) %>%
   pivot_wider(id_cols = c(code, location_name, population, income_group, cluster), 
-              names_from = measure, values_from = c(val)) %>%
+              names_from = measure, values_from = c(val)) 
+df_out %>%
   write_csv("andrew_YLL_YLD_countries.csv")
+
+df_out %>%
+  mutate(Both = YLDs + YLLs) %>%
+  group_by(code) %>%
+  mutate(YLDs = YLDs/sum(YLDs), YLLs = YLLs/sum(YLLs), Both = Both/sum(Both)) %>% 
+  ungroup() %>%
+  filter(cluster == "Senescent") %>%
+  write_csv("andrew_YLL_YLD_countries_senescent_only.csv")
+
+
+# How many countries have senescent disease as the biggest burden in terms of a) YLD b) YLL c) YLL+YLD
+df_out %>%
+  mutate(Both = YLDs + YLLs) %>%
+  arrange(code, -Both) %>%
+  group_by(code) %>%
+  summarise(cluster = first(cluster)) %>%
+  tabyl(cluster)
+
+df_out %>%
+  mutate(ratio = YLDs/YLLs) %>%
+  ggplot() + geom_histogram(aes(x = ratio))
 
 df %>%
   right_join(cluster4_df) %>%
