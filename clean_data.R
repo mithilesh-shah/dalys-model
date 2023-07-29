@@ -1,4 +1,4 @@
-setwd("/Users/julianashwin/Documents/GitHub/dalys-model/julian_stuff")
+setwd("/Users/julianashwin/Documents/GitHub/dalys-model")
 rm(list=ls())
 
 library(ggplot2)
@@ -12,7 +12,7 @@ library(stargazer)
 "
 Clean fertility data
 "
-fertility_est_df <- read_xlsx("raw_data/WPP2022_FERTILITY_RATES_BY_SINGLE_AGE_OF_MOTHER.xlsx",
+fertility_est_df <- read_xlsx("raw_data/WPP/WPP2022_FERTILITY_RATES_BY_SINGLE_AGE_OF_MOTHER.xlsx",
                               sheet = "Estimates", skip = 16) %>%
   rename(location = `Region, subregion, country or area *`, 
          type = Type, year = Year) %>%
@@ -43,7 +43,7 @@ fertility_est_df <- fertility_est_df %>%
 
 ## Fertility projections
 # Low
-fertility_low_df <- as.data.frame(read_xlsx("raw_data/WPP2022_FERTILITY_RATES_BY_SINGLE_AGE_OF_MOTHER.xlsx",
+fertility_low_df <- as.data.frame(read_xlsx("raw_data/WPP/WPP2022_FERTILITY_RATES_BY_SINGLE_AGE_OF_MOTHER.xlsx",
                                         sheet = "Low variant", skip = 16)) %>%
   rename(location = `Region, subregion, country or area *`, 
          type = Type, year = Year) %>% filter(!is.na(year)) %>%
@@ -62,7 +62,7 @@ fertility_low_df <- as.data.frame(read_xlsx("raw_data/WPP2022_FERTILITY_RATES_BY
   select(-type) %>% arrange(location, year, age)
 
 # Medium
-fertility_med_df <- as.data.frame(read_xlsx("raw_data/WPP2022_FERTILITY_RATES_BY_SINGLE_AGE_OF_MOTHER.xlsx",
+fertility_med_df <- as.data.frame(read_xlsx("raw_data/WPP/WPP2022_FERTILITY_RATES_BY_SINGLE_AGE_OF_MOTHER.xlsx",
                                             sheet = "Medium variant", skip = 16)) %>%
   rename(location = `Region, subregion, country or area *`, 
          type = Type, year = Year) %>% filter(!is.na(year)) %>%
@@ -80,7 +80,7 @@ fertility_med_df <- as.data.frame(read_xlsx("raw_data/WPP2022_FERTILITY_RATES_BY
                               location == "Low-income countries" ~ "World Bank Low Income", TRUE ~ location))  %>%
   select(-type) %>% arrange(location, year, age)
 # High
-fertility_high_df <- as.data.frame(read_xlsx("raw_data/WPP2022_FERTILITY_RATES_BY_SINGLE_AGE_OF_MOTHER.xlsx",
+fertility_high_df <- as.data.frame(read_xlsx("raw_data/WPP/WPP2022_FERTILITY_RATES_BY_SINGLE_AGE_OF_MOTHER.xlsx",
                                             sheet = "High variant", skip = 16)) %>%
   rename(location = `Region, subregion, country or area *`, 
          type = Type, year = Year) %>% filter(!is.na(year)) %>%
@@ -272,6 +272,44 @@ stargazer(as.matrix(cause_table[54:106,]))
 "
 Clean GBD data
 "
+GBD_files <- dir("/Users/julianashwin/Documents/Research/DALYs/data/GBD_raw")
+gbd_df_all <- tibble()
+for (file in GBD_files){
+  print(GBD_files)
+  df_in <- read_csv(str_c("/Users/julianashwin/Documents/Research/DALYs/data/GBD_raw/", file, "/", file, ".csv")) %>%
+    dplyr::select(location_name, cause_name, age_name, measure_name, metric_name, val, upper, lower) %>%
+    filter(!str_detect(cause_name, "Total")) %>%
+    mutate(measure_name = str_replace(measure_name, "YLDs \\(Years Lived with Disability\\)", "YLDs")) %>%
+    mutate(measure_name = str_replace(measure_name, "DALYs \\(Disability-Adjusted Life Years\\)", "DALYs")) %>%
+    mutate(age_name = str_replace(age_name, "<1 year", "0-1 years")) %>%
+    mutate(age_name = str_replace(age_name, "95\\+ years", "95-99 years"))
+  
+  gbd_df_all <- rbind(gbd_df_all, df_in)
+}
+gbd_df_all %>%
+  arrange(location_name, cause_name, measure_name, metric_name, age_name) %>%
+  saveRDS("/Users/julianashwin/Documents/Research/DALYs/data/gbd_data_all.rds")
+# Save names of all countries in GBD data
+gbd_df_all %>%
+  distinct(location_name) %>%
+  saveRDS("raw_data/GBD/gbd_data_countries.rds")
+
+# Save deaths data
+gbd_df_all %>%
+  filter(measure_name == "Deaths") %>%
+  saveRDS("raw_data/GBD/gbd_data_deaths.rds")
+# Save YLDs data
+gbd_df_all %>%
+  filter(measure_name == "YLDs") %>%
+  saveRDS("raw_data/GBD/gbd_data_ylds.rds")
+# Save DALYs data
+gbd_df_all %>%
+  filter(measure_name == "DALYS") %>%
+  saveRDS("raw_data/GBD/gbd_data_dalys.rds")
+
+
+tabyl(gbd_df_all, age_name)
+
 gbd_df <- 
   as_tibble(gbd_new_df) %>%
   filter(measure_id %in% c(1,3)) %>%

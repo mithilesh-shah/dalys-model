@@ -1,4 +1,4 @@
-setwd("/Users/julianashwin/Documents/GitHub/dalys-model/julian_stuff")
+setwd("/Users/julianashwin/Documents/GitHub/dalys-model")
 rm(list=ls())
 
 
@@ -6,7 +6,7 @@ library(tidyverse)
 library(readxl)
 library(janitor)
 
-cluster4_df <- as.data.frame(read_xlsx("raw_data/kmeans_clusters_4.xlsx")) %>%
+cluster4_df <- as.data.frame(read_xlsx("raw_data/clusters/kmeans_clusters_4.xlsx")) %>%
   select(-`...1`) %>%
   filter(!str_detect(cause_name, "Total")) %>%
   pivot_longer(cols = c(-cause_name, -cluster_no), names_to = "age_name", values_to = "incidence") %>%
