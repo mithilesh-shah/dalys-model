@@ -62,6 +62,12 @@ gbd_df_all %>%
   filter(measure_name == "Incidence") %>%
   filter(sex_name == "Both") %>%
   saveRDS("raw_data/GBD/gbd_data_incidence.rds")
+# Save Prevalence data
+gbd_df_all %>%
+  filter(measure_name == "Prevalence") %>%
+  filter(sex_name == "Both") %>%
+  saveRDS("raw_data/GBD/gbd_data_prevalence.rds")
+
 
 # Import the gbd_countries from saved file
 gbd_countries <- readRDS("raw_data/GBD/gbd_data_countries.rds")
@@ -233,14 +239,15 @@ macro_df %>%
 WPP life tables and population
 "
 ## Import and clean population data 
-pop_df <- read_xlsx("raw_data/WPP/WPP2022_POP_F01_1_POPULATION_SINGLE_AGE_BOTH_SEXES_2019.xlsx", skip = 16) %>%
+pop_df <- read_xlsx("/Users/julianashwin/Documents/Research/DALYs/data/WPP2022_POP_F01_1_POPULATION_SINGLE_AGE_BOTH_SEXES.xlsx", 
+          skip = 16, sheet = "Estimates") %>%
   rename(location = `Region, subregion, country or area *`, 
          type = Type, year = Year) %>%
   filter(!is.na(year), !is.na(location)) %>%
   filter(type == "Country/Area") %>%
   dplyr::select(c(location, year, `0`:`100+`)) %>% 
   pivot_longer(cols = -c(location, year), names_to = "age", values_to = "population") %>%
-  mutate(population = population*1e3) %>%
+  mutate(population = as.numeric(population)*1e3) %>%
   mutate(location_name = case_when(location == "State of Palestine" ~ "Palestine", 
                               location == "Türkiye" ~ "Turkey", 
                               location == "China, Taiwan Province of China" ~ "Taiwan (Province of China)", 
@@ -255,6 +262,51 @@ gbd_countries$location_name[gbd_countries$location_name %in% unique(pop_df$locat
 gbd_countries$location_name[!(gbd_countries$location_name %in% unique(pop_df$location_name))]
 unique(pop_df$location_name)[!(unique(pop_df$location_name) %in% gbd_countries$location_name)]
 ## Import and clean life tables
+lifetab_df_pre85 <- read_xlsx("/Users/julianashwin/Documents/Research/DALYs/data/WPP2022_MORT_F06_1_SINGLE_AGE_LIFE_TABLE_ESTIMATES_BOTH_SEXES.xlsx",
+                        skip = 16, sheet = "Estimates 1950-1985") %>%
+  rename(location = `Region, subregion, country or area *`, 
+         type = Type, year = Year, age = `Age (x)`, 
+         mortality = `Central death rate m(x,n)`,
+         survival = `Number of survivors l(x)`,
+         remaining_le = `Expectation of life e(x)`) %>%
+  filter(!is.na(year), !is.na(location)) %>%
+  filter(type == "Country/Area") %>%
+  dplyr::select(location, year, age, mortality, survival, remaining_le) %>%
+  mutate(survival = survival/1e5) %>%
+  mutate(location_name = case_when(location == "State of Palestine" ~ "Palestine", 
+                                   location == "Türkiye" ~ "Turkey", 
+                                   location == "China, Taiwan Province of China" ~ "Taiwan (Province of China)", 
+                                   location == "Dem. People's Republic of Korea" ~ "Democratic People's Republic of Korea",
+                                   location == "Micronesia (Fed. States of)" ~ "Micronesia (Federated States of)",
+                                   TRUE ~ location)) %>%
+  filter(location_name %in% gbd_countries$location_name) %>%
+  dplyr::select(location_name, year, age, mortality, survival, remaining_le)
+
+lifetab_df_post85 <- read_xlsx("/Users/julianashwin/Documents/Research/DALYs/data/WPP2022_MORT_F06_1_SINGLE_AGE_LIFE_TABLE_ESTIMATES_BOTH_SEXES.xlsx",
+                        skip = 16, sheet = "Estimates 1986-2021")
+lifetab_df_post85 <- lifetab_df_post85 %>%
+  rename(location = `Region, subregion, country or area *`, 
+         type = Type, year = Year, age = `Age (x)`, 
+         mortality = `Central death rate m(x,n)`,
+         survival = `Number of survivors l(x)`,
+         remaining_le = `Expectation of life e(x)`) %>%
+  filter(!is.na(year), !is.na(location)) %>%
+  filter(type == "Country/Area") %>%
+  dplyr::select(location, year, age, mortality, survival, remaining_le) %>%
+  mutate(survival = survival/1e5) %>%
+  mutate(location_name = case_when(location == "State of Palestine" ~ "Palestine", 
+                                   location == "Türkiye" ~ "Turkey", 
+                                   location == "China, Taiwan Province of China" ~ "Taiwan (Province of China)", 
+                                   location == "Dem. People's Republic of Korea" ~ "Democratic People's Republic of Korea",
+                                   location == "Micronesia (Fed. States of)" ~ "Micronesia (Federated States of)",
+                                   TRUE ~ location)) %>%
+  filter(location_name %in% gbd_countries$location_name) %>%
+  dplyr::select(location_name, year, age, mortality, survival, remaining_le)
+
+lifetab_df <- lifetab_df_pre85 %>%
+  rbind(lifetab_df_post85) %>%
+  arrange(location_name, year, age)
+
 lifetab_df <- read_xlsx("raw_data/WPP/WPP2022_MORT_F06_1_SINGLE_AGE_LIFE_TABLE_ESTIMATES_BOTH_SEXES_2019.xlsx", skip = 16) %>%
   rename(location = `Region, subregion, country or area *`, 
          type = Type, year = Year, age = `Age (x)`, 
@@ -277,6 +329,7 @@ lifetab_df <- read_xlsx("raw_data/WPP/WPP2022_MORT_F06_1_SINGLE_AGE_LIFE_TABLE_E
 
 pop_df %>%
   left_join(lifetab_df) %>%
+  filter(year %% 10 == 0) %>%
   ggplot() + theme_bw() + facet_wrap(~year) +
   geom_line(aes(x = age, y = survival, group = location_name, alpha = population))
 
@@ -285,7 +338,7 @@ pop_df %>%
   mutate(age_name = str_c(plyr::round_any(age,5, f = floor), "-", plyr::round_any(age,5, f = floor)+4, " years"),
          age_name = case_when(age == 0 ~ "0-1 years", age >=1 & age < 5 ~  "1-4 years", 
                               age >= 100 ~ "100+ years", TRUE ~ age_name)) %>%
-  write_csv("clean_data/country_lifetab_data.csv")
+  saveRDS("clean_data/country_lifetab_data.rds")
   
 
 
