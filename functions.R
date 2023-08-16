@@ -9,44 +9,61 @@ create_mortality_df <- function(all_mortality_df, loc_name = "Global", start_yea
       filter(year == 2019) %>%
       mutate(year = start_year)
   }
-  mortality_df <- all_mortality_df %>%
-    filter(location == loc_name) %>%
-    relocate(year, .after = location) %>%
-    full_join(crossing(year = start_year:end_year, age = 0:end_age)) %>%
-    arrange(location, year, age) %>%
-    fill(location, .direction = "down") %>%
-    group_by(location, age) %>% 
-    fill(names(all_mortality_df)) %>% 
-    ungroup()
-  
+  if (loc_name == "Regions"){
+    mortality_df <- all_mortality_df %>%
+      filter(location %in% c("World Bank High Income", "World Bank Low Income", 
+                             "World Bank Lower Middle Income", "World Bank Upper Middle Income")) %>%
+      relocate(year, .after = location) %>%
+      full_join(crossing(location = c("World Bank High Income", "World Bank Low Income", 
+                                      "World Bank Lower Middle Income", "World Bank Upper Middle Income"), 
+                         year = start_year:end_year, age = 0:end_age)) %>%
+      arrange(location, year, age) %>%
+      fill(location, .direction = "down") %>%
+      group_by(location, age) %>% 
+      fill(names(all_mortality_df)) %>% 
+      ungroup()
+  } else {
+    mortality_df <- all_mortality_df %>%
+      filter(location == loc_name) %>%
+      relocate(year, .after = location) %>%
+      full_join(crossing(year = start_year:end_year, age = 0:end_age)) %>%
+      arrange(location, year, age) %>%
+      fill(location, .direction = "down") %>%
+      group_by(location, age) %>% 
+      fill(names(all_mortality_df)) %>% 
+      ungroup()
+  }
   
   if (growth_transitions){
-    stopifnot(loc_name %in% income_transition_df$income_group)
+    stopifnot(loc_name %in% c("Regions", unique(income_transition_df$income_group)))
+    region_names <- c("World Bank High Income", "World Bank Low Income", 
+                      "World Bank Lower Middle Income", "World Bank Upper Middle Income")
     # Identify the transition proportions, groups and causes
-    transitions_df <- filter(income_transition_df, income_group == loc_name) %>%
-      arrange(year)
-    group_names <- names(income_transition_df)[3:6]
     cause_names <- names(select(all_mortality_df, mortality:last_col()))
-    
-    # Loop through years
-    pb <- txtProgressBar(min = max(start_year, 2021)+1, max = end_year)
-    for (yy in (max(start_year, 2021)+1):end_year){
-      yy_obs <- which(mortality_df$year == yy)
-      mortality_df[yy_obs,cause_names] <- 0
-      trans_props <- transitions_df[which(transitions_df$year == yy),group_names]
-      # Add contribution from each income groups rates
-      for (gg in group_names){
-        add_rates <- as.numeric(trans_props[1,gg])*as.matrix(all_mortality_df[which(
-          all_mortality_df$location == gg & all_mortality_df$year == max(all_mortality_df$year)),cause_names])
-        mortality_df[yy_obs,cause_names] <- mortality_df[yy_obs,cause_names] + as.matrix(add_rates)
+    for (region in region_names){
+      print(str_c("Projecting forwards mortality for ", region))
+      transitions_df <- filter(income_transition_df, income_group == region) %>%
+        arrange(year)
+      # Loop through years
+      pb <- txtProgressBar(min = max(start_year, 2021)+1, max = end_year)
+      for (yy in (max(start_year, 2021)+1):end_year){
+        yy_obs <- which(mortality_df$year == yy & mortality_df$location == region)
+        mortality_df[yy_obs,cause_names] <- 0
+        trans_props <- transitions_df[which(transitions_df$year == yy),region_names]
+        # Add contribution from each income groups rates
+        for (gg in region_names){
+          add_rates <- as.numeric(trans_props[1,gg])*as.matrix(all_mortality_df[which(
+            all_mortality_df$location == gg & all_mortality_df$year == max(all_mortality_df$year)),cause_names])
+          mortality_df[yy_obs,cause_names] <- mortality_df[yy_obs,cause_names] + as.matrix(add_rates)
+        }
+        setTxtProgressBar(pb, yy)
       }
-      setTxtProgressBar(pb, yy)
+      
     }
   } 
   
   return(mortality_df)
 }
-
 
 
 
@@ -58,42 +75,62 @@ create_disability_df <- function(all_disability_df, loc_name = "Global", start_y
                                 income_transition_df = NULL){
   if (start_year > 2019){
     all_disability_df <- all_disability_df %>%
-      filter(year = 2019) %>%
+      filter(year == 2019) %>%
       mutate(year = start_year)
   }
-  disability_df <- all_disability_df %>%
-    filter(location == loc_name) %>%
-    relocate(year, .after = location) %>%
-    full_join(crossing(year = start_year:end_year, age = 0:end_age)) %>%
-    arrange(location, year, age) %>%
-    fill(location, .direction = "down") %>%
-    group_by(location, age) %>% 
-    fill(names(all_disability_df)) %>% 
-    ungroup()
+  
+  if (loc_name == "Regions"){
+    disability_df <- all_disability_df %>%
+      filter(location %in% c("World Bank High Income", "World Bank Low Income", 
+                             "World Bank Lower Middle Income", "World Bank Upper Middle Income")) %>%
+      relocate(year, .after = location) %>%
+      full_join(crossing(location = c("World Bank High Income", "World Bank Low Income", 
+                                      "World Bank Lower Middle Income", "World Bank Upper Middle Income"), 
+                         year = start_year:end_year, age = 0:end_age)) %>%
+      arrange(location, year, age) %>%
+      fill(location, .direction = "down") %>%
+      group_by(location, age) %>% 
+      fill(names(all_disability_df)) %>% 
+      ungroup()
+  } else {
+    disability_df <- all_disability_df %>%
+      filter(location == loc_name) %>%
+      relocate(year, .after = location) %>%
+      full_join(crossing(year = start_year:end_year, age = 0:end_age)) %>%
+      arrange(location, year, age) %>%
+      fill(location, .direction = "down") %>%
+      group_by(location, age) %>% 
+      fill(names(all_disability_df)) %>% 
+      ungroup()
+  }
   
   if (growth_transitions){
-    stopifnot(loc_name %in% income_transition_df$income_group)
+    stopifnot(loc_name %in% c("Regions", unique(income_transition_df$income_group)))
+    region_names <- c("World Bank High Income", "World Bank Low Income", 
+                      "World Bank Lower Middle Income", "World Bank Upper Middle Income")
     # Identify the transition proportions, groups and causes
-    transitions_df <- filter(income_transition_df, income_group == loc_name) %>%
-      arrange(year)
-    group_names <- names(income_transition_df)[3:6]
     cause_names <- names(select(all_disability_df, disability:last_col()))
-    
-    # Loop through years
-    pb <- txtProgressBar(min = max(start_year, 2021)+1, max = end_year)
-    for (yy in (max(start_year, 2021)+1):end_year){
-      yy_obs <- which(disability_df$year == yy)
-      disability_df[yy_obs,cause_names] <- 0
-      trans_props <- transitions_df[which(transitions_df$year == yy),group_names]
-      # Add contribution from each income groups rates
-      for (gg in group_names){
-        add_rates <- as.numeric(trans_props[1,gg])*as.matrix(all_disability_df[which(
-          all_disability_df$location == gg & all_disability_df$year == max(all_disability_df$year)),cause_names])
-        disability_df[yy_obs,cause_names] <- disability_df[yy_obs,cause_names] + as.matrix(add_rates)
+    for (region in region_names){
+      print(str_c("Projecting forwards disability for ", region))
+      transitions_df <- filter(income_transition_df, income_group == region) %>%
+        arrange(year)
+      # Loop through years
+      pb <- txtProgressBar(min = max(start_year, 2021)+1, max = end_year)
+      for (yy in (max(start_year, 2021)+1):end_year){
+        yy_obs <- which(disability_df$year == yy & disability_df$location == region)
+        disability_df[yy_obs,cause_names] <- 0
+        trans_props <- transitions_df[which(transitions_df$year == yy),region_names]
+        # Add contribution from each income groups rates
+        for (gg in region_names){
+          add_rates <- as.numeric(trans_props[1,gg])*as.matrix(all_disability_df[which(
+            all_disability_df$location == gg & all_disability_df$year == max(all_disability_df$year)),cause_names])
+          disability_df[yy_obs,cause_names] <- disability_df[yy_obs,cause_names] + as.matrix(add_rates)
+        }
+        setTxtProgressBar(pb, yy)
       }
-      setTxtProgressBar(pb, yy)
+      
     }
-  } 
+  }
   
   return(disability_df)
 }
@@ -156,7 +193,7 @@ Function to change fertility through slowing aging
 "
 slow_fertility <- function(fertility_df, slow_by = 0.01, start_slowing = 30, 
                             end_age = 100, fertility_type = "fertility_est"){
-  
+  fertility_df <- data.frame(fertility_df)
   fertility_df$fertility <- fertility_df[,fertility_type]
   fertility_df$fertility_new <- fertility_df$fertility
   for (aa in start_slowing:end_age){
@@ -171,6 +208,7 @@ slow_fertility <- function(fertility_df, slow_by = 0.01, start_slowing = 30,
       fertility_df$fertility[int_obs] + dec_part*(fertility_df$fertility[int_obs+1]
                                                     - fertility_df$fertility[int_obs])
   }
+  fertility_df <- tibble(fertility_df)
   return(fertility_df)
 }
 
@@ -199,70 +237,116 @@ def_disability_new <- function(disability_df, disease_list, remove_prop = 1){
 Forecast dalys from start_year to end_year given population, fertility, mortality and disability
 "
 forecast_dalys <- function(population_df, fertility_df, mortality_df, disability_df, 
-                         new = "none", start_year = 2021, end_year = 2100, end_age = 100, 
-                         no_births = FALSE, fertility_type = "fertility_est", 
+                         new_vars = "none", start_year = 2021, end_year = 2100, end_age = 100, 
+                         no_births = FALSE, fertility_type = "fertility_est", loc_name = "Regions",
                          growth_transitions = FALSE){
+  population_df1 <- data.frame(population_df)
+  fertility_df1 <- data.frame(fertility_df)
+  mortality_df1 <- data.frame(mortality_df)
+  disability_df1 <- data.frame(disability_df)
   # Set fertility rates according to fertility_type
-  fertility_df <- add_column(fertility_df, fertility =  as.numeric(unlist(fertility_df[,fertility_type])))
+  fertility_df1$fertility <- fertility_df1[,fertility_type]
   # If not using growth transitions, just use start_year data
   if (!growth_transitions){
-    mortality_df <- filter(mortality_df, year == start_year) %>%
-      full_join(crossing(year = start_year:end_year, age = 0:end_age), by = c("year", "age")) %>%
-      arrange(location, year, age) %>% fill(location, .direction = "down") %>% 
-      group_by(location, age) %>% fill(names(mortality_df)) %>% 
-      ungroup()
-    
-    disability_df <- filter(disability_df, year == start_year) %>%
-      full_join(crossing(year = start_year:end_year, age = 0:end_age), by = c("year", "age")) %>%
-      arrange(location, year, age) %>% fill(location, .direction = "down") %>% 
-      group_by(location, age) %>% fill(names(disability_df)) %>% 
-      ungroup()
+    if (loc_name == "Regions"){
+      mortality_df1 <- filter(mortality_df1, year == start_year) %>%
+        full_join(crossing(location = c("World Bank High Income", "World Bank Low Income", 
+                                        "World Bank Lower Middle Income", "World Bank Upper Middle Income"), 
+                           year = start_year:end_year, age = 0:end_age)) %>%
+        arrange(location, year, age) %>% fill(location, .direction = "down") %>% 
+        group_by(location, age) %>% fill(names(mortality_df1)) %>% 
+        ungroup() %>% data.frame()
+      
+      disability_df1 <- filter(disability_df1, year == start_year) %>%
+        full_join(crossing(location = c("World Bank High Income", "World Bank Low Income", 
+                                        "World Bank Lower Middle Income", "World Bank Upper Middle Income"), 
+                           year = start_year:end_year, age = 0:end_age)) %>%
+        arrange(location, year, age) %>% fill(location, .direction = "down") %>% 
+        group_by(location, age) %>% fill(names(disability_df1)) %>% 
+        ungroup() %>% data.frame()
+    } else {
+      # Mortality and disability without any growth transitions, so constant mortality and disability
+      mortality_df1 <- filter(mortality_df1, year == start_year) %>%
+        full_join(crossing(year = start_year:end_year, age = 0:end_age), by = c("year", "age")) %>%
+        arrange(location, year, age) %>% fill(location, .direction = "down") %>% 
+        group_by(location, age) %>% fill(names(mortality_df1)) %>% 
+        ungroup() %>% data.frame()
+      
+      disability_df1 <- filter(disability_df1, year == start_year) %>%
+        full_join(crossing(year = start_year:end_year, age = 0:end_age), by = c("year", "age")) %>%
+        arrange(location, year, age) %>% fill(location, .direction = "down") %>% 
+        group_by(location, age) %>% fill(names(disability_df1)) %>% 
+        ungroup() %>% data.frame()
+    }
   }
-  
   # Set mortality and/or disability to new version according to new
-  stopifnot(new %in% c("none", "both", "mortality", "disability"))
-  if (new == "both"){
-    mortality_df$mortality <- mortality_df$mortality_new
-    disability_df$disability <- disability_df$disability_new
-  } else if (new == "mortality"){
-    mortality_df$mortality <- mortality_df$mortality_new
-  } else if (new == "disability"){
-    disability_df$disability <- disability_df$disability_new
+  stopifnot(new_vars %in% c("none", "both", "mortality", "disability"))
+  if (new_vars == "both"){
+    mortality_df1$mortality <- mortality_df1$mortality_new
+    disability_df1$disability <- disability_df1$disability_new
+  } else if (new_vars == "mortality"){
+    mortality_df1$mortality <- mortality_df1$mortality_new
+  } else if (new_vars == "disability"){
+    disability_df1$disability <- disability_df1$disability_new
   }
   if (no_births){
-    fertility_df$fertility <- 0
+    fertility_df1$fertility <- 0
   }
   # Create a population dataframe to fill
-  pop_data_long <- population_df %>% 
-    filter(year == start_year) %>%
-    select(year, age, population) %>%
-    full_join(crossing(year = start_year:end_year, age = 0:end_age), by = c("year", "age")) %>%
-    arrange(year, age) %>%
-    left_join(select(mortality_df, c(year, age, mortality)), by = c("year", "age")) %>%
-    left_join(select(disability_df, c(year, age, disability)), by = c("year", "age")) %>%
-    left_join(select(fertility_df, c(year, age, fertility)), by = c("year", "age")) %>%
-    arrange(age, year) %>% 
-    group_by(age) %>% fill(fertility, .direction = "down") %>% ungroup() %>%
-    mutate(fertility = replace_na(fertility, 0)) %>%
-    mutate(mortality = mortality/100000, disability = disability/100000) %>%
-    arrange(year, age)
+  if (loc_name == "Regions"){
+    pop_data_long <- population_df1 %>% 
+      filter(year == start_year) %>%
+      select(location, year, age, population) %>%
+      full_join(crossing(location = c("World Bank High Income", "World Bank Low Income", 
+                                      "World Bank Lower Middle Income", "World Bank Upper Middle Income"), 
+                         year = start_year:end_year, age = 0:end_age)) %>%
+      arrange(location, year, age) %>%
+      left_join(select(mortality_df1, c(location, year, age, mortality))) %>%
+      left_join(select(disability_df1, c(location, year, age, disability))) %>%
+      left_join(select(fertility_df1, c(location, year, age, fertility))) %>%
+      arrange(location, age, year) %>% 
+      group_by(location, age) %>% fill(fertility, .direction = "down") %>% ungroup() %>%
+      mutate(fertility = replace_na(fertility, 0)) %>%
+      mutate(mortality = mortality/100000, disability = disability/100000) %>%
+      arrange(location, year, age) %>%
+      data.frame()
+  } else {
+    pop_data_long <- population_df1 %>% 
+      filter(year == start_year) %>%
+      select(location, year, age, population) %>%
+      full_join(crossing(location = loc_name, year = start_year:end_year, age = 0:end_age)) %>%
+      arrange(location, year, age) %>%
+      left_join(select(mortality_df1, c(location, year, age, mortality))) %>%
+      left_join(select(disability_df1, c(location, year, age, disability))) %>%
+      left_join(select(fertility_df1, c(location, year, age, fertility))) %>%
+      arrange(location, age, year) %>% 
+      group_by(location, age) %>% fill(fertility, .direction = "down") %>% ungroup() %>%
+      mutate(fertility = replace_na(fertility, 0)) %>%
+      mutate(mortality = mortality/100000, disability = disability/100000) %>%
+      arrange(location, year, age) %>%
+      data.frame()
+  }
   
   
   
   years <- start_year:end_year
-  for (yy in years[2:length(years)]){
-    # Isolate last year's pop and combine with rates
-    pop_old <- pop_data_long[which(pop_data_long$year == yy-1),]
-    # Calculate the new births (assume half of population are women)
-    population_new <- rep(0, nrow(pop_old))
-    population_new[1] <- sum(pop_old$population*pop_old$fertility)
-    # Use mortality to calculate survivors from previous period
-    population_new[2:(end_age+1)] <- pop_old$population[1:end_age]*(1-pop_old$mortality[1:end_age])
-    # Add the new population numbers back into pop_data_long
-    pop_data_long$population[which(pop_data_long$year == yy)] <- population_new
+  region_names <- unique(pop_data_long$location)
+  for (region in region_names){
+    for (yy in years[2:length(years)]){
+      # Isolate last year's pop and combine with rates
+      pop_old <- pop_data_long[which(pop_data_long$location == region & pop_data_long$year == yy-1),]
+      # Calculate the new births (assume half of population are women)
+      population_new <- rep(0, nrow(pop_old))
+      population_new[1] <- sum(pop_old$population*pop_old$fertility)
+      # Use mortality to calculate survivors from previous period
+      population_new[2:(end_age+1)] <- pop_old$population[1:end_age]*(1-pop_old$mortality[1:end_age])
+      # Add the new population numbers back into pop_data_long
+      pop_data_long$population[which(pop_data_long$location == region & pop_data_long$year == yy)] <- population_new
+    }
   }
   pop_data_long <- pop_data_long %>%
     mutate(daly = (1 - disability)*population)
+  #pop_data_long %>% ggplot() + facet_wrap(~location) + geom_line(aes(x = age, y = daly, group = year, color = year))
   
   return(pop_data_long)
 }
@@ -273,44 +357,45 @@ forecast_dalys <- function(population_df, fertility_df, mortality_df, disability
 "
 Compare forecasts under mortality/disability and mortality_new/disability_new
 "
-compare_forecasts <- function(population_df, fertility_df, mortality_df, disability_df, 
+compare_forecasts <- function(population_df, fertility_df, mortality_df, disability_df, loc_name = "Regions",
                               start_year = 2021, end_year = 2100, end_age = 100, no_births = FALSE,
                               fertility_type = "fertility_est", growth_transitions = FALSE){
   # Calculate the forecast dalys for baseline and new 
   pop_baseline <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, 
                                  start_year = start_year, end_year = end_year, end_age = end_age, 
-                                 no_births = no_births, new = "none", fertility_type = fertility_type, 
+                                 no_births = no_births, new = "none", fertility_type = fertility_type, loc_name = loc_name, 
                                  growth_transitions = growth_transitions)
   pop_new <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, 
                             start_year = start_year, end_year = end_year, end_age = end_age, 
-                            no_births = no_births, new = "both", fertility_type = fertility_type, 
+                            no_births = no_births, new = "both", fertility_type = fertility_type, loc_name = loc_name, 
                             growth_transitions = growth_transitions)
   pop_mortonly <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, 
                             start_year = start_year, end_year = end_year, end_age = end_age, 
-                            no_births = no_births, new = "mortality", fertility_type = fertility_type, 
+                            no_births = no_births, new = "mortality", fertility_type = fertility_type, loc_name = loc_name, 
                             growth_transitions = growth_transitions)
   pop_disonly <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, 
                                  start_year = start_year, end_year = end_year, end_age = end_age, 
-                                 no_births = no_births, new = "disability", fertility_type = fertility_type, 
+                                 no_births = no_births, new = "disability", fertility_type = fertility_type, loc_name = loc_name, 
                                 growth_transitions = growth_transitions)
   
+  
   # Merge in the baseline and new
-  dalys_df <- pop_baseline %>% select(year, age, population, daly, mortality, disability) %>%
+  dalys_df <- pop_baseline %>% select(location, year, age, population, daly, mortality, disability) %>%
     rename(population_base = population, daly_base = daly, mort_base = mortality, dis_base = disability) %>%
-    full_join(select(pop_new, c(year, age, population, daly, mortality, disability)), by = c("year", "age")) %>%
+    full_join(select(pop_new, c(location, year, age, population, daly, mortality, disability))) %>%
     rename(population_new = population, daly_new = daly, mort_new = mortality, dis_new = disability) %>%
-    full_join(select(pop_mortonly, c(year, age, population, daly, mortality, disability)), by = c("year", "age")) %>%
+    full_join(select(pop_mortonly, c(location, year, age, population, daly, mortality, disability))) %>%
     rename(population_mort = population, daly_mort = daly, mort_mort = mortality, dis_mort = disability) %>%
-    full_join(select(pop_disonly, c(year, age, population, daly, mortality, disability)), by = c("year", "age")) %>%
+    full_join(select(pop_disonly, c(location, year, age, population, daly, mortality, disability))) %>%
     rename(population_dis = population, daly_dis = daly, mort_dis = mortality, dis_dis = disability) %>%
     mutate(pop_diff = population_new - population_base, daly_diff = daly_new - daly_base,
            pop_diff_mort = population_mort - population_base, daly_diff_mort = daly_mort - daly_base,
            pop_diff_dis = population_dis - population_base, daly_diff_dis = daly_dis - daly_base) %>%
-    arrange(year, age)
+    arrange(location, year, age)
   
 
   # Aggregate to annual
-  dalys_yly <- dalys_df %>% group_by(year) %>%
+  dalys_yly <- dalys_df %>% group_by(location, year) %>%
     mutate(LE_base = cumprod(1 - mort_base), LE_new = cumprod(1 - mort_new),
            LE_mort = cumprod(1 - mort_mort), LE_dis = cumprod(1 - mort_dis)) %>%
     mutate(HLE_base = (1-dis_base)*cumprod(1 - mort_base), HLE_new = (1-dis_new)*cumprod(1 - mort_new),

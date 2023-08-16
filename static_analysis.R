@@ -21,7 +21,7 @@ income_groups <- c("Global", "High Income", "Upper Middle Income", "Lower Middle
 Import data
 "
 cluster_df <- read_csv("clean_data/cluster_membership_data.csv") %>%
-  mutate(cluster_4 = factor(cluster_4, ordered = T, levels = c("Infant", "Adult (early)", "Adult (late)", "Age-related")))
+  mutate(cluster_4 = factor(cluster_4, ordered = T, levels = c("Infant", "Adult (early)", "Adult (late)", "Ageing-related")))
 macro_df <- read_csv("clean_data/country_wdi_data.csv") %>%
   rbind(tibble(location_name = "Global", year = 2019, GNI_pc = 0, WDI_population = 0, income_group = "Global")) %>%
   mutate(income_group = factor(str_remove(income_group, "World Bank "), ordered = T, levels = income_groups))
@@ -30,6 +30,7 @@ gbd_deaths_df <- readRDS("raw_data/GBD/gbd_data_deaths.rds")
 gbd_ylds_df <- readRDS("raw_data/GBD/gbd_data_ylds.rds")
 gbd_dalys_df <- readRDS("raw_data/GBD/gbd_data_dalys.rds")
 gbd_prevalence_df <- readRDS("raw_data/GBD/gbd_data_prevalence.rds")
+gbd_incidence_df <- readRDS("raw_data/GBD/gbd_data_incidence.rds")
 gbd_ylls_df <- readRDS("raw_data/GBD/gbd_data_ylls.rds")
 
 ## Aggregate up lifetable to group level
@@ -90,7 +91,7 @@ weights_df$condition <- weights_df$Prevalence - weights_df$YLDs
 "
 Decompose mortality and disability by cluster
 "  
-gbd_deaths_df %>%
+global_mort_df <- gbd_deaths_df %>%
   filter(metric_name == "Rate") %>%
   left_join(filter(lifetab_grp_df, year == 2019)) %>%
   group_by(age_name, cause_name) %>%
@@ -99,30 +100,29 @@ gbd_deaths_df %>%
   group_by(age_name, cluster_4) %>%
   summarise(val = sum(val)) %>%
   mutate(age = factor(str_remove(age_name, " years"), ordered = T, levels = str_remove(age_groups, " years"))) %>%
-  ggplot(aes(x = age, y = val)) + theme_bw() + 
-  geom_bar(aes(fill = fct_rev(cluster_4)), stat = "identity", position = "stack") + 
-  scale_fill_manual(values = c("Age-related" = "firebrick1", "Adult (late)" = "blue3", 
-                               "Adult (early)" = "cornflowerblue", "Infant" = "forestgreen")) + 
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
-  labs(y = "Mortality rate", x = "Age", fill = "Disease cluster") 
-ggsave("figures/clustering/global_mortality_cluster4.pdf", width = 6, height = 5)
+  mutate(measure = "Mortality")
 
-gbd_ylds_df %>%
+global_disab_df <- gbd_ylds_df %>%
   filter(metric_name == "Rate") %>%
   left_join(filter(lifetab_grp_df, year == 2019)) %>%
   group_by(age_name, cause_name) %>%
   summarise(val = sum(population*val)/sum(population)/1e5) %>%
-  right_join(distinct(cluster_df, cause_name, cluster_4)) %>%
+  left_join(distinct(cluster_df, cause_name, cluster_4)) %>%
   group_by(age_name, cluster_4) %>%
   summarise(val = sum(val)) %>%
   mutate(age = factor(str_remove(age_name, " years"), ordered = T, levels = str_remove(age_groups, " years"))) %>%
-  ggplot(aes(x = age, y = val)) + theme_bw() + 
-  geom_bar(aes(fill = fct_rev(cluster_4)), stat = "identity", position = "stack") + 
-  scale_fill_manual(values = c("Age-related" = "firebrick1", "Adult (late)" = "blue3", 
+  mutate(measure = "Disability")
+
+global_mort_df %>%
+  rbind(global_disab_df) %>%
+  mutate(measure = factor(measure, ordered = T, levels = c("Mortality", "Disability"))) %>%
+  ggplot(aes(x = age, y = val)) + theme_bw() + facet_wrap(~measure) +
+  geom_bar(aes(fill = cluster_4), stat = "identity", position = "stack") + 
+  scale_fill_manual(values = c("Ageing-related" = "firebrick1", "Adult (late)" = "blue3", 
                                "Adult (early)" = "cornflowerblue", "Infant" = "forestgreen")) + 
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
-  labs(y = "Disability rate", x = "Age", fill = "Disease cluster") 
-ggsave("figures/clustering/global_disability_cluster4.pdf", width = 6, height = 5)
+  labs(y = "Rate", x = "Age", fill = "Disease cluster") 
+ggsave("figures/clustering/global_md_rates_cluster4.pdf", width = 10, height = 4)
 
 
 "
@@ -263,7 +263,7 @@ gbd_deaths_df %>%
   summarise(prob_death = sum(prob_death*population)/sum(population), population = sum(population)) %>%
   ggplot() + theme_bw() + 
   geom_bar(aes(x = income_group, y = prob_death, fill = cluster_4), stat = "identity", position = "stack") + 
-  scale_fill_manual(values = c("Age-related" = "firebrick1", "Adult (late)" = "blue3", 
+  scale_fill_manual(values = c("Ageing-related" = "firebrick1", "Adult (late)" = "blue3", 
   "Adult (early)" = "cornflowerblue", "Infant" = "forestgreen")) + 
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
   labs(y = "Probability of death for new-born", x = "Income Group", fill = "Disease cluster")
@@ -271,7 +271,7 @@ ggsave("figures/lifetime_burden/prob_death_newborn.pdf", width = 4, height = 4)
   
 
 # Multiply each death prob by remaining LE at that age
-p1 <- gbd_deaths_df %>%
+df_p1 <- gbd_deaths_df %>%
   # Get mortality probability of each 
   filter(metric_name == "Rate") %>%
   mutate(val = val/1e5) %>%
@@ -282,24 +282,15 @@ p1 <- gbd_deaths_df %>%
   # Aggregate up to cause_group
   inner_join(distinct(cluster_df, cause_name, cluster_4)) %>%
   group_by(location_name, cluster_4) %>%
-  summarise(exp_yll = sum(exp_yll)) %>%
+  summarise(exp_loss = sum(exp_yll)) %>%
   # Merge in population of new-borns
   left_join(select(filter(lifetab_df, age == 0 & year == 2019), location_name, population)) %>%
   # Group into income categories, weighted by population
   inner_join(select(macro_latest_df, location_name, income_group)) %>%
   group_by(income_group, cluster_4) %>%
-  summarise(exp_yll = sum(exp_yll*population)/sum(population), population = sum(population)) %>%
-  ggplot() + theme_bw() + 
-  geom_bar(aes(x = income_group, y = exp_yll, fill = cluster_4), stat = "identity", position = "stack") + 
-  scale_fill_manual(values = c("Age-related" = "firebrick1", "Adult (late)" = "blue3", 
-                               "Adult (early)" = "cornflowerblue", "Infant" = "forestgreen")) + 
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
-  labs(y = "Expected YLL for new-born", x = "Income Group", fill = "Disease cluster")
-p1
-ggsave("figures/lifetime_burden/exp_yll_newborn.pdf", width = 4, height = 4)
-
-
-p2 <- gbd_ylds_df %>%
+  summarise(exp_loss = sum(exp_loss*population)/sum(population), population = sum(population)) %>%
+  mutate(type = "Expected YLL")
+df_p2 <- gbd_ylds_df %>%
   # Get disability probability of each 
   filter(metric_name == "Rate") %>%
   mutate(val = val/1e5) %>%
@@ -310,24 +301,26 @@ p2 <- gbd_ylds_df %>%
   # Aggregate up to cause_group
   inner_join(distinct(cluster_df, cause_name, cluster_4)) %>%
   group_by(location_name, cluster_4) %>%
-  summarise(exp_yld = sum(exp_yld)) %>%
+  summarise(exp_loss = sum(exp_yld)) %>%
   # Merge in population of new-borns
   left_join(select(filter(lifetab_df, age == 0 & year == 2019), location_name, population)) %>%
   # Group into income categories, weighted by population
   inner_join(select(macro_latest_df, location_name, income_group)) %>%
   group_by(income_group, cluster_4) %>%
-  summarise(exp_yld = sum(exp_yld*population)/sum(population), population = sum(population)) %>%
-  ggplot() + theme_bw() + 
-  geom_bar(aes(x = income_group, y = exp_yld, fill = cluster_4), stat = "identity", position = "stack") + 
-  scale_fill_manual(values = c("Age-related" = "firebrick1", "Adult (late)" = "blue3", 
+  summarise(exp_loss = sum(exp_loss*population)/sum(population), population = sum(population)) %>%
+  mutate(type = "Expected YLD")
+
+df_p1 %>%
+  rbind(df_p2) %>%
+  ggplot() + theme_bw() + facet_wrap(~ type) + 
+  geom_bar(aes(x = income_group, y = exp_loss, fill = cluster_4), stat = "identity", position = "stack") + 
+  scale_fill_manual(values = c("Ageing-related" = "firebrick1", "Adult (late)" = "blue3", 
                                "Adult (early)" = "cornflowerblue", "Infant" = "forestgreen")) + 
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
-  labs(y = "Expected YLD for new-born", x = "Income Group", fill = "Disease cluster")
-p2
-ggsave("figures/lifetime_burden/exp_yld_newborn.pdf", width = 4, height = 4)
+  labs(y = "Expected years lost", x = "", fill = "Disease cluster")
 
-ggarrange(p1 + ggtitle("Expected YLL"), p2 + ggtitle("Expected YLD"), nrow = 1, common.legend = T, legend = "right")
-ggsave("figures/lifetime_burden/exp_burden_newborn.pdf", width = 6.5, height = 4)
+ggsave("figures/lifetime_burden/exp_loss_newborn.pdf", width = 6, height = 4)
+
 
 
 
