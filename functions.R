@@ -8,7 +8,11 @@ create_mortality_df <- function(all_mortality_df, loc_name = "Global", start_yea
     all_mortality_df <- all_mortality_df %>%
       filter(year == 2019) %>%
       mutate(year = start_year)
+  } else {
+    all_mortality_df <- all_mortality_df %>%
+      filter(year == start_year)
   }
+    
   if (loc_name == "Regions"){
     mortality_df <- all_mortality_df %>%
       filter(location %in% c("World Bank High Income", "World Bank Low Income", 
@@ -77,6 +81,9 @@ create_disability_df <- function(all_disability_df, loc_name = "Global", start_y
     all_disability_df <- all_disability_df %>%
       filter(year == 2019) %>%
       mutate(year = start_year)
+  }else {
+    all_disability_df <- all_disability_df %>%
+      filter(year == start_year)
   }
   
   if (loc_name == "Regions"){
@@ -136,81 +143,6 @@ create_disability_df <- function(all_disability_df, loc_name = "Global", start_y
 }
 
 
-
-
-
-
-"
-Function to change mortality through slowing aging
-"
-slow_mortality <- function(mortality_df, slow_by = 0.01, start_slowing = 30, 
-                           end_age = 100){
-  mortality_df$mortality_new <- mortality_df$mortality
-  for (yy in unique(mortality_df$year)){
-    for (aa in start_slowing:end_age){
-      obs <- which(mortality_df$age == aa & mortality_df$year == yy)
-      cont_age <- max((1 - slow_by)*aa, start_slowing)
-      int_part <- cont_age%/%1
-      int_obs <- which(mortality_df$age == int_part & mortality_df$year == yy)
-      dec_part <- cont_age%%1
-      # New mortality should be slowed version of old mortality 
-      # m_new = m_old[int_part] + dec_part*(m_old[int_part+1] - m_old[in_part])
-      mortality_df$mortality_new[obs] <- 
-        mortality_df$mortality[int_obs] + dec_part*(mortality_df$mortality[int_obs+1]
-                                                    - mortality_df$mortality[int_obs])
-    }
-  }
-  return(mortality_df)
-}
-
-
-"
-Function to change disability through slowing aging
-"
-slow_disability <- function(disability_df, slow_by = 0.01, start_slowing = 30, 
-                           end_age = 100){
-  disability_df$disability_new <- disability_df$disability
-  for (yy in unique(mortality_df$year)){
-    for (aa in start_slowing:end_age){
-      obs <- which(disability_df$age == aa & disability_df$year == yy)
-      cont_age <- max((1 - slow_by)*aa, start_slowing)
-      int_part <- cont_age%/%1
-      int_obs <- which(disability_df$age == int_part & disability_df$year == yy)
-      dec_part <- cont_age%%1
-      # New disability should be slowed version of old disability 
-      # m_new = m_old[int_part] + dec_part*(m_old[int_part+1] - m_old[in_part])
-      disability_df$disability_new[obs] <- 
-        disability_df$disability[int_obs] + dec_part*(disability_df$disability[int_obs+1]
-                                                    - disability_df$disability[int_obs])
-    }
-  }
-  return(disability_df)
-}
-
-
-"
-Function to change fertility through slowing aging
-"
-slow_fertility <- function(fertility_df, slow_by = 0.01, start_slowing = 30, 
-                            end_age = 100, fertility_type = "fertility_est"){
-  fertility_df <- data.frame(fertility_df)
-  fertility_df$fertility <- fertility_df[,fertility_type]
-  fertility_df$fertility_new <- fertility_df$fertility
-  for (aa in start_slowing:end_age){
-    obs <- which(fertility_df$age == aa)
-    cont_age <- max((1 - slow_by)*aa, start_slowing)
-    int_part <- cont_age%/%1
-    int_obs <- which(fertility_df$age == int_part)
-    dec_part <- cont_age%%1
-    # New fertility should be slowed version of old fertility 
-    # m_new = m_old[int_part] + dec_part*(m_old[int_part+1] - m_old[in_part])
-    fertility_df$fertility_new[obs] <- 
-      fertility_df$fertility[int_obs] + dec_part*(fertility_df$fertility[int_obs+1]
-                                                    - fertility_df$fertility[int_obs])
-  }
-  fertility_df <- tibble(fertility_df)
-  return(fertility_df)
-}
 
 
 "
@@ -405,4 +337,86 @@ compare_forecasts <- function(population_df, fertility_df, mortality_df, disabil
                        pop_diff, pop_diff_mort, pop_diff_dis, daly_diff, daly_diff_mort, daly_diff_dis,
                        LE_base, LE_new, LE_mort, LE_dis, HLE_dis, HLE_new, HLE_mort, HLE_dis), sum))
   return(dalys_yly)
+}
+
+
+
+
+
+
+
+
+
+
+
+"
+Function to change mortality through slowing aging
+"
+slow_mortality <- function(mortality_df, slow_by = 0.01, start_slowing = 30, 
+                           end_age = 100){
+  mortality_df$mortality_new <- mortality_df$mortality
+  for (yy in unique(mortality_df$year)){
+    for (aa in start_slowing:end_age){
+      obs <- which(mortality_df$age == aa & mortality_df$year == yy)
+      cont_age <- max((1 - slow_by)*aa, start_slowing)
+      int_part <- cont_age%/%1
+      int_obs <- which(mortality_df$age == int_part & mortality_df$year == yy)
+      dec_part <- cont_age%%1
+      # New mortality should be slowed version of old mortality 
+      # m_new = m_old[int_part] + dec_part*(m_old[int_part+1] - m_old[in_part])
+      mortality_df$mortality_new[obs] <- 
+        mortality_df$mortality[int_obs] + dec_part*(mortality_df$mortality[int_obs+1]
+                                                    - mortality_df$mortality[int_obs])
+    }
+  }
+  return(mortality_df)
+}
+
+
+"
+Function to change disability through slowing aging
+"
+slow_disability <- function(disability_df, slow_by = 0.01, start_slowing = 30, 
+                            end_age = 100){
+  disability_df$disability_new <- disability_df$disability
+  for (yy in unique(mortality_df$year)){
+    for (aa in start_slowing:end_age){
+      obs <- which(disability_df$age == aa & disability_df$year == yy)
+      cont_age <- max((1 - slow_by)*aa, start_slowing)
+      int_part <- cont_age%/%1
+      int_obs <- which(disability_df$age == int_part & disability_df$year == yy)
+      dec_part <- cont_age%%1
+      # New disability should be slowed version of old disability 
+      # m_new = m_old[int_part] + dec_part*(m_old[int_part+1] - m_old[in_part])
+      disability_df$disability_new[obs] <- 
+        disability_df$disability[int_obs] + dec_part*(disability_df$disability[int_obs+1]
+                                                      - disability_df$disability[int_obs])
+    }
+  }
+  return(disability_df)
+}
+
+
+"
+Function to change fertility through slowing aging
+"
+slow_fertility <- function(fertility_df, slow_by = 0.01, start_slowing = 30, 
+                           end_age = 100, fertility_type = "fertility_est"){
+  fertility_df <- data.frame(fertility_df)
+  fertility_df$fertility <- fertility_df[,fertility_type]
+  fertility_df$fertility_new <- fertility_df$fertility
+  for (aa in start_slowing:end_age){
+    obs <- which(fertility_df$age == aa)
+    cont_age <- max((1 - slow_by)*aa, start_slowing)
+    int_part <- cont_age%/%1
+    int_obs <- which(fertility_df$age == int_part)
+    dec_part <- cont_age%%1
+    # New fertility should be slowed version of old fertility 
+    # m_new = m_old[int_part] + dec_part*(m_old[int_part+1] - m_old[in_part])
+    fertility_df$fertility_new[obs] <- 
+      fertility_df$fertility[int_obs] + dec_part*(fertility_df$fertility[int_obs+1]
+                                                  - fertility_df$fertility[int_obs])
+  }
+  fertility_df <- tibble(fertility_df)
+  return(fertility_df)
 }
