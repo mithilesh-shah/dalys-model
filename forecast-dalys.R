@@ -147,6 +147,160 @@ mortality_df$mortality_adult_early4 <- rowSums(mortality_df[,which(names(mortali
 mortality_df$mortality_adult_late4 <- rowSums(mortality_df[,which(names(mortality_df) %in% adult_late4_diseases)])
 mortality_df$mortality_senescent4 <- rowSums(mortality_df[,which(names(mortality_df) %in% senescent4_diseases)])
 
+# Play forward mortality based on exponential starting at 75
+mortality_df <- mortality_df %>% 
+  full_join(crossing(location = unique(mortality_df$location), year = unique(mortality_df$year),
+           sex_name = unique(mortality_df$sex_name), age = 0:500)) %>%
+  arrange(location, year, sex_name, age) %>%
+  group_by(location, year, sex_name) %>%
+  # Only use the trend from 75 onwards
+  mutate(age_NAs = case_when(age >= 75 & age <= 100 ~ age)) %>%
+  mutate(log_mortality_infant4 = case_when(age >= 75 ~ log(mortality_infant4))) %>%
+  mutate(log_mortality_adult_early4 = case_when(age >= 75 ~ log(mortality_adult_early4))) %>%
+  mutate(log_mortality_adult_late4 = case_when(age >= 75 ~ log(mortality_adult_late4))) %>%
+  mutate(log_mortality_senescent4 = case_when(age >= 75 ~ log(mortality_senescent4))) %>%
+  # Project forward infant
+  mutate(beta1 = cov(log_mortality_infant4, age_NAs, use = "pairwise.complete.obs")/var(age_NAs, na.rm = T)) %>%
+  mutate(beta0 = mean(log_mortality_infant4, na.rm = T) - beta1*mean(age_NAs, na.rm = T)) %>%
+  mutate(mortality_infant4_fit = case_when(age >= 75 ~ exp(beta0 + beta1*age))) %>% 
+  # Project forward adult_early
+  mutate(beta1 = cov(log_mortality_adult_early4, age_NAs, use = "pairwise.complete.obs")/var(age_NAs, na.rm = T)) %>%
+  mutate(beta0 = mean(log_mortality_adult_early4, na.rm = T) - beta1*mean(age_NAs, na.rm = T)) %>%
+  mutate(mortality_adult_early4_fit = case_when(age >= 75 ~ exp(beta0 + beta1*age))) %>% 
+  # Project forward adult_late
+  mutate(beta1 = cov(log_mortality_adult_late4, age_NAs, use = "pairwise.complete.obs")/var(age_NAs, na.rm = T)) %>%
+  mutate(beta0 = mean(log_mortality_adult_late4, na.rm = T) - beta1*mean(age_NAs, na.rm = T)) %>%
+  mutate(mortality_adult_late4_fit = case_when(age >= 75 ~ exp(beta0 + beta1*age))) %>% 
+  # Project forward senescent
+  mutate(beta1 = cov(log_mortality_senescent4, age_NAs, use = "pairwise.complete.obs")/var(age_NAs, na.rm = T)) %>%
+  mutate(beta0 = mean(log_mortality_senescent4, na.rm = T) - beta1*mean(age_NAs, na.rm = T)) %>%
+  mutate(mortality_senescent4_fit = case_when(age >= 75 ~ exp(beta0 + beta1*age))) %>% 
+  select(-c(log_mortality_infant4, log_mortality_adult_early4, log_mortality_adult_late4, 
+            log_mortality_senescent4, beta1, beta0)) %>%
+  # Add in the projections
+  mutate(mortality_infant4_proj = case_when(age <= 100 ~ mortality_infant4, 
+                                          age > 100 ~ mortality_infant4_fit)) %>%
+  mutate(mortality_adult_early4_proj = case_when(age <= 100 ~ mortality_adult_early4, 
+                                               age > 100 ~ mortality_adult_early4_fit)) %>%
+  mutate(mortality_adult_late4_proj = case_when(age <= 100 ~ mortality_adult_late4, 
+                                               age > 100 ~ mortality_adult_late4_fit)) %>%
+  mutate(mortality_senescent4_proj = case_when(age <= 100 ~ mortality_senescent4, 
+                                               age > 100 ~ mortality_senescent4_fit)) %>%
+  relocate(year, sex_name, age, mortality, 
+           mortality_infant4, mortality_infant4_fit, mortality_infant4_proj,
+           mortality_adult_early4, mortality_adult_early4_fit, mortality_adult_early4_proj,
+           mortality_adult_late4, mortality_adult_late4_fit, mortality_adult_late4_proj,
+           mortality_senescent4, mortality_senescent4_fit, mortality_senescent4_proj,
+           .after = location) 
+
+
+# Play forward disability based on exponential starting at 75
+disability_df <- disability_df %>% 
+  full_join(crossing(location = unique(disability_df$location), year = unique(disability_df$year),
+                     sex_name = unique(disability_df$sex_name), age = 0:500)) %>%
+  arrange(location, year, sex_name, age) %>%
+  group_by(location, year, sex_name) %>%
+  # Only use the trend from 75 onwards
+  mutate(age_NAs = case_when(age >= 75 & age <= 100 ~ age)) %>%
+  mutate(log_disability_infant4 = case_when(age >= 75 ~ log(disability_infant4))) %>%
+  mutate(log_disability_adult_early4 = case_when(age >= 75 ~ log(disability_adult_early4))) %>%
+  mutate(log_disability_adult_late4 = case_when(age >= 75 ~ log(disability_adult_late4))) %>%
+  mutate(log_disability_senescent4 = case_when(age >= 75 ~ log(disability_senescent4))) %>%
+  # Project forward infant
+  mutate(beta1 = cov(log_disability_infant4, age_NAs, use = "pairwise.complete.obs")/var(age_NAs, na.rm = T)) %>%
+  mutate(beta0 = mean(log_disability_infant4, na.rm = T) - beta1*mean(age_NAs, na.rm = T)) %>%
+  mutate(disability_infant4_fit = case_when(age >= 75 ~ exp(beta0 + beta1*age))) %>% 
+  # Project forward adult_early
+  mutate(beta1 = cov(log_disability_adult_early4, age_NAs, use = "pairwise.complete.obs")/var(age_NAs, na.rm = T)) %>%
+  mutate(beta0 = mean(log_disability_adult_early4, na.rm = T) - beta1*mean(age_NAs, na.rm = T)) %>%
+  mutate(disability_adult_early4_fit = case_when(age >= 75 ~ exp(beta0 + beta1*age))) %>% 
+  # Project forward adult_late
+  mutate(beta1 = cov(log_disability_adult_late4, age_NAs, use = "pairwise.complete.obs")/var(age_NAs, na.rm = T)) %>%
+  mutate(beta0 = mean(log_disability_adult_late4, na.rm = T) - beta1*mean(age_NAs, na.rm = T)) %>%
+  mutate(disability_adult_late4_fit = case_when(age >= 75 ~ exp(beta0 + beta1*age))) %>% 
+  # Project forward senescent
+  mutate(beta1 = cov(log_disability_senescent4, age_NAs, use = "pairwise.complete.obs")/var(age_NAs, na.rm = T)) %>%
+  mutate(beta0 = mean(log_disability_senescent4, na.rm = T) - beta1*mean(age_NAs, na.rm = T)) %>%
+  mutate(disability_senescent4_fit = case_when(age >= 75 ~ exp(beta0 + beta1*age))) %>% 
+  select(-c(log_disability_infant4, log_disability_adult_early4, log_disability_adult_late4, 
+            log_disability_senescent4, beta1, beta0)) %>%
+  # Add in the projections
+  mutate(disability_infant4_proj = case_when(age <= 100 ~ disability_infant4, 
+                                            age > 100 ~ disability_infant4_fit)) %>%
+  mutate(disability_adult_early4_proj = case_when(age <= 100 ~ disability_adult_early4, 
+                                                 age > 100 ~ disability_adult_early4_fit)) %>%
+  mutate(disability_adult_late4_proj = case_when(age <= 100 ~ disability_adult_late4, 
+                                                age > 100 ~ disability_adult_late4_fit)) %>%
+  mutate(disability_senescent4_proj = case_when(age <= 100 ~ disability_senescent4, 
+                                               age > 100 ~ disability_senescent4_fit)) %>%
+  relocate(year, sex_name, age, disability, 
+           disability_infant4, disability_infant4_fit, disability_infant4_proj,
+           disability_adult_early4, disability_adult_early4_fit, disability_adult_early4_proj,
+           disability_adult_late4, disability_adult_late4_fit, disability_adult_late4_proj,
+           disability_senescent4, disability_senescent4_fit, disability_senescent4_proj,
+           .after = location) 
+
+
+# Plot the mortality projections
+p1 <- mortality_df %>%
+  filter(year == 2021 & age < 170) %>%
+  ggplot() + theme_bw() + facet_wrap(~location) +
+  geom_hline(aes(yintercept = log(1e5)), linetype = "dashed") +
+  geom_line(aes(x = age, log(mortality_senescent4_fit), color = "Ageing-related"), linetype = "dashed") + 
+  geom_line(aes(x = age, log(mortality_senescent4), color = "Ageing-related")) + 
+  geom_line(aes(x = age, log(mortality_infant4_fit), color = "Infant"), linetype = "dashed") + 
+  geom_line(aes(x = age, log(mortality_infant4), color = "Infant")) + 
+  geom_line(aes(x = age, log(mortality_adult_early4_fit), color = "Adult (early)"), linetype = "dashed") + 
+  geom_line(aes(x = age, log(mortality_adult_early4), color = "Adult (early)")) + 
+  geom_line(aes(x = age, log(mortality_adult_late4_fit), color = "Adult (late)"), linetype = "dashed") + 
+  geom_line(aes(x = age, log(mortality_adult_late4), color = "Adult (late)")) +
+  scale_color_manual(values = cluster_cols) + 
+  labs(x = "Age", y = "log mortality", color = "Category", title = "Mortality")
+p2 <- disability_df %>%
+  filter(year == 2021 & age < 170) %>%
+  ggplot() + theme_bw() + facet_wrap(~location) +
+  geom_hline(aes(yintercept = log(1e5)), linetype = "dashed") +
+  geom_line(aes(x = age, log(disability_senescent4_fit), color = "Ageing-related"), linetype = "dashed") + 
+  geom_line(aes(x = age, log(disability_senescent4), color = "Ageing-related")) + 
+  geom_line(aes(x = age, log(disability_infant4_fit), color = "Infant"), linetype = "dashed") + 
+  geom_line(aes(x = age, log(disability_infant4), color = "Infant")) + 
+  geom_line(aes(x = age, log(disability_adult_early4_fit), color = "Adult (early)"), linetype = "dashed") + 
+  geom_line(aes(x = age, log(disability_adult_early4), color = "Adult (early)")) + 
+  geom_line(aes(x = age, log(disability_adult_late4_fit), color = "Adult (late)"), linetype = "dashed") + 
+  geom_line(aes(x = age, log(disability_adult_late4), color = "Adult (late)")) +
+  scale_color_manual(values = cluster_cols) + 
+  labs(x = "Age", y = "log disability", color = "Category", title = "Disability")
+ggarrange(p1,p2, common.legend = T)
+ggsave("figures/clustering/log_rates_proj.pdf", width = 10, height = 6)
+
+
+
+
+
+  
+x %>%
+  filter(year == 2021, location == locations[2]) %>%
+  group_by(location, year, sex_name) %>%
+  mutate(age_NAs = case_when(age >= 50 & age <= 100 ~ age)) %>%
+  mutate(log_mortality_senescent4 = case_when(age >= 50 ~ log(mortality_senescent4))) %>%
+  mutate(beta1 = cov(log_mortality_senescent4, age_NAs, use = "pairwise.complete.obs")/var(age_NAs, na.rm = T)) %>%
+  mutate(beta0 = mean(log_mortality_senescent4, na.rm = T) - beta1*mean(age_NAs, na.rm = T)) %>%
+  mutate(log_mortality_senescent4 = beta0 + beta1*age) %>% 
+  mutate(mortality_senescent4_new = case_when(age <= 100 ~ mortality_senescent4, 
+                                              age > 100 ~ exp(log_mortality_senescent4))) %>%
+  mutate(mortality_senescent4_new = case_when(mortality_senescent4_new > 100000 ~ 100000,
+                                              TRUE ~ mortality_senescent4_new)) %>%
+  filter(year == 2021) %>%
+  ggplot() + theme_bw() + facet_wrap(~location) +
+  geom_point(aes(x = age_NAs, y = mortality_senescent4)) +
+  geom_line(aes(x = age, (mortality_senescent4), color = "senescent4")) + 
+  geom_point(aes(x = age, (mortality_senescent4_new), color = "senescent4")) + 
+  geom_line(aes(x = age, (mortality_infant4), color = "infant4")) + 
+  geom_line(aes(x = age, (mortality_adult_early4), color = "adult_early4")) + 
+  geom_line(aes(x = age, (mortality_adult_late4), color = "adult_late4"))
+
+
+
 # Disability due to each disease cluster
 disability_df$disability_infant4 <- rowSums(disability_df[,which(names(disability_df) %in% infant4_diseases)])
 disability_df$disability_adult_early4 <- rowSums(disability_df[,which(names(disability_df) %in% adult_early4_diseases)])
@@ -154,6 +308,23 @@ disability_df$disability_adult_late4 <- rowSums(disability_df[,which(names(disab
 disability_df$disability_senescent4 <- rowSums(disability_df[,which(names(disability_df) %in% senescent4_diseases)])
 
 
+mortality_df %>%
+  filter(year == 2021) %>%
+  ggplot() + theme_bw() + facet_wrap(~location) +
+  geom_line(aes(x = age, log(mortality_senescent4), color = "mortality_senescent4")) + 
+  geom_line(aes(x = age, log(mortality_infant4), color = "mortality_infant4")) + 
+  geom_line(aes(x = age, log(mortality_adult_early4), color = "mortality_adult_early4")) + 
+  geom_line(aes(x = age, log(mortality_adult_late4), color = "mortality_adult_late4"))
+
+
+
+disability_df %>%
+  filter(year == 2021) %>%
+  ggplot() + theme_bw() + facet_wrap(~location) +
+  geom_line(aes(x = age, log(disability_senescent4), color = "disability_senescent4")) + 
+  geom_line(aes(x = age, log(disability_infant4), color = "disability_infant4")) + 
+  geom_line(aes(x = age, log(disability_adult_early4), color = "disability_adult_early4")) + 
+  geom_line(aes(x = age, log(disability_adult_late4), color = "disability_adult_late4"))
 
 "
 What does reducing a disease look like?
@@ -215,8 +386,8 @@ ggsave("figures/scenarios/eradicating_disease.pdf", width = 10, height = 6)
 "
 An example of removing some disease
 "
-mortality_df$mortality_new <- mortality_df$mortality - 0*mortality_df$mortality_senescent4
-disability_df$disability_new <- disability_df$disability - 0*disability_df$disability_senescent4
+mortality_df$mortality_new <- mortality_df$mortality - 0.5*mortality_df$mortality_senescent4
+disability_df$disability_new <- disability_df$disability - 0.5*disability_df$disability_senescent4
 
 dalys_compare <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, loc_name = loc_name, 
                                    start_year = 2021, end_year = end_year, no_births = TRUE, 
@@ -229,7 +400,15 @@ dalys_compare %>%
   geom_bar(aes(y = daly_diff_dis/1e6, fill = "Disability"), stat = "identity") +
   labs(y = "Extra DALYs (millions)", x = "Year", title = "Infant", fill = "")
 
-
+dalys_compare %>%
+  #filter(year %in% c(start_year, end_year)) %>%
+  select(location, year, LE_base, LE_new, LE_mort, LE_dis) %>%
+  ggplot() + theme_bw() + facet_wrap(~location) +
+  geom_line(aes(x = year, y = LE_base, color = "Base"))+
+  geom_line(aes(x = year, y = LE_new, color = "New"))+
+  geom_line(aes(x = year, y = LE_mort, color = "Mort"))+
+  geom_line(aes(x = year, y = LE_dis, color = "Dis"))
+  
 
 
 
@@ -308,6 +487,7 @@ dalys_scenarios <- dalys_scenarios %>%
 dalys_scenarios %>%
   saveRDS("clean_data/daly_scenarios.rds")
 
+dalys_scenarios <- readRDS("clean_data/daly_scenarios.rds")
 
 
 dalys_scenarios %>%
@@ -337,7 +517,8 @@ ggsave("figures/scenarios/example_complimentarity_infant.pdf", width = 10, heigh
 
 daly_summary <- dalys_scenarios %>%
   group_by(start_year, no_births, growth_transitions, eradication, diseases, location) %>%
-  summarise(daly_diff = sum(daly_diff), daly_diff_mort = sum(daly_diff_mort), daly_diff_dis = sum(daly_diff_dis)) %>%
+  summarise(daly_base = sum(daly_base), daly_new = sum(daly_new), daly_mort = sum(daly_mort), daly_dis = sum(daly_dis),
+            daly_diff = sum(daly_diff), daly_diff_mort = sum(daly_diff_mort), daly_diff_dis = sum(daly_diff_dis)) %>%
   mutate(complimentarity = (daly_diff - daly_diff_mort - daly_diff_dis)/daly_diff)
 
 daly_summary %>%
@@ -345,7 +526,7 @@ daly_summary %>%
   filter(growth_transitions == "Economic Growth") %>%
   ggplot() + theme_bw() + 
   facet_wrap(~no_births +location, nrow = 2, scales = "free_y") +
-  geom_line(aes(x = eradication, y = daly_diff, color = diseases, linetype = factor(start_year))) +
+  geom_line(aes(x = eradication, y = daly_base, color = diseases, linetype = factor(start_year))) +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + 
   labs(y = "Extra DALYs (millions)", x = "Reduction", linetype = "Start year")
 ggsave("figures/scenarios/daly_diff_reduction.pdf", width = 10, height = 6)
