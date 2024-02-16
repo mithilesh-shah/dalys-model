@@ -1,0 +1,193 @@
+setwd("/Users/julianashwin/Documents/GitHub/dalys-model/")
+rm(list=ls())
+
+library(ggplot2)
+library(ggpubr)
+library(readxl)
+library(tidyverse)
+
+source("functions.R")
+
+
+
+
+
+W_scenarios <- read_rds("temp.rds")
+W_scenarios <- read_rds("figures/scenarios/W_scenarios.rds")
+
+
+W_scenarios_all <- W_scenarios %>%
+  mutate(location = "Global") %>%
+  group_by(start_year, no_births, growth_transitions, diseases, type, location, eradication) %>%
+  summarise(W = sum(W), Wnewborn = sum(Wnewborn)) %>%
+  rbind(W_scenarios) %>%
+  mutate(diseases = case_when(str_detect(diseases, "infant4") ~ "Infant",
+                              str_detect(diseases, "adult_early4") ~ "Adult (early)",
+                              str_detect(diseases, "adult_late4") ~ "Adult (late)",
+                              str_detect(diseases, "senescent4") ~ "Ageing-related", TRUE ~ "All")) %>%
+  mutate(diseases = factor(diseases, ordered = T, levels = c("Infant", "Adult (early)",  "Adult (late)", "Ageing-related")),
+         location = str_remove(location, "World Bank "),
+         location = factor(location, ordered = T, levels = c("Global", "Low Income",  "Lower Middle Income", "Upper Middle Income", "High Income"))) %>%
+  group_by(start_year, no_births, growth_transitions, diseases, type, location) %>%
+  mutate(W_start = sum((eradication == 0)*W),
+         Wnewborn_start = sum((eradication == 0)*Wnewborn))
+  
+
+elast_df <- W_scenarios_all %>%
+  filter(start_year == 2021, no_births == FALSE, growth_transitions == TRUE) %>%
+  group_by(start_year, no_births, growth_transitions, diseases, location) %>%
+  group_by(diseases, location, type) %>%
+  select(-c(start_year, no_births, growth_transitions)) %>%
+  arrange(eradication) %>%
+  mutate(erad = 1 - eradication) %>%
+  mutate(W_lag = lag(W, n = 1, order_by = eradication),
+         Wnewborn_lag = lag(Wnewborn, n = 1, order_by = eradication),
+         erad_lag = lag(erad, n = 1, order_by = eradication),
+         erad_diff = erad - erad_lag) %>%
+  mutate(dW_dd = (W - lag(W, n = 1, order_by = eradication))/erad_diff,
+         dWnewborn_dd = (Wnewborn - lag(Wnewborn, n = 1, order_by = eradication))/erad_diff) %>%
+  mutate(d2W_dd2 = (lead(dW_dd, n=1, order_by = eradication) - dW_dd)/erad_diff^2,
+         d2Wnewborn_dd2 =  (lead(dWnewborn_dd, n=1, order_by = eradication) - dWnewborn_dd)/erad_diff^2) %>%
+  group_by(diseases, location, eradication) %>%
+  na.omit() %>%
+  mutate(W_elast_1 = dW_dd*(1/W_lag),
+         Wnewborn_elast_1 = dWnewborn_dd*(1/Wnewborn_lag),
+         W_elast_2 = d2W_dd2*(1/W_lag),
+         Wnewborn_elast_2 = d2Wnewborn_dd2*(1/Wnewborn_lag)) %>%
+  mutate(W_sum = sum((type != "both")*W) - W_start,
+         W_sum = case_when(type == "both" ~ W_sum, TRUE ~ W),
+         Wnewborn_sum = sum((type != "both")*Wnewborn) - Wnewborn_start,
+         Wnewborn_sum = case_when(type == "both" ~ Wnewborn_sum, TRUE ~ Wnewborn),
+         dW_dd_sum = sum((type != "both")*dW_dd),
+         dW_dd_sum = case_when(type == "both" ~ dW_dd_sum, TRUE ~ dW_dd),
+         dWnewborn_dd_sum = sum((type != "both")*dWnewborn_dd),
+         dWnewborn_dd_sum = case_when(type == "both" ~ dWnewborn_dd_sum, TRUE ~ dWnewborn_dd),
+         d2W_dd2_sum = sum((type != "both")*d2W_dd2),
+         d2W_dd2_sum = case_when(type == "both" ~ d2W_dd2_sum, TRUE ~ d2W_dd2),
+         W_elast_1_sum = sum((type != "both")*W_elast_1),
+         W_elast_1_sum = case_when(type == "both" ~ W_elast_1_sum, TRUE ~ W_elast_1),
+         W_elast_2_sum = sum((type != "both")*W_elast_2),
+         W_elast_2_sum = case_when(type == "both" ~ W_elast_2_sum, TRUE ~ W_elast_2)) %>%
+  ungroup()
+
+elast_df %>%
+  #filter(location == "Global") %>% 
+  mutate(type = str_to_title(type)) %>%
+  ggplot(aes(x = eradication)) + theme_bw() + 
+  facet_wrap(~location+diseases, ncol = 4) +
+  geom_line(aes(y = W/W_start, color = type)) +
+  geom_ribbon(aes(ymax = W/W_start, ymin = W_sum/W_start, fill = type), alpha = 0.5) + 
+  guides(fill="none") +   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + 
+  labs(x = "Disease Eradication", y = "W", color = "Effect")
+ggsave("figures/derivatives/W_levels.pdf", width = 8, height = 10)
+
+elast_df %>%
+  filter(location %in% c("Global", "Low Income", "High Income")) %>% 
+  mutate(type = str_to_title(type)) %>%
+  ggplot(aes(x = eradication)) + theme_bw() + 
+  facet_wrap(~location+diseases, ncol = 4) +
+  geom_line(aes(y = -(dW_dd)/W_start, color = type)) +
+  geom_ribbon(aes(ymax = -(dW_dd)/W_start, ymin = -(dW_dd_sum)/W_start, fill = type), alpha = 0.5) + 
+  guides(fill="none") +   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + 
+  labs(x = "Disease Eradication",  color = "Effect", y = expression(-frac(partialdiff~W,partialdiff~er[i])))
+ggsave("figures/derivatives/W_diff.pdf", width = 8, height = 6)
+
+elast_df %>%
+  filter(location %in% c("Global", "Low Income", "High Income")) %>% 
+  mutate(type = str_to_title(type)) %>%  
+  ggplot(aes(x = eradication)) + theme_bw() + 
+  facet_wrap(~location+diseases, ncol = 4) +
+  geom_line(aes(y = -(dW_dd)*(1/W_lag), color = type)) +
+  geom_ribbon(aes(ymax = -(dW_dd)*(1/W_lag), ymin = -(dW_dd_sum)*(1/W_lag), fill = type), alpha = 0.5) + 
+  guides(fill="none") +   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + 
+  labs(x = "Disease Eradication", color = "Effect", y = expression(-frac(partialdiff~W,partialdiff~er[i])~ frac(1,W)))
+ggsave("figures/derivatives/W_elast.pdf", width = 8, height = 6)
+
+
+elast_df %>%
+  filter(location %in% c("Global", "Low Income", "High Income")) %>% 
+  mutate(type = str_to_title(type)) %>%  
+  ggplot(aes(x = eradication)) + theme_bw() + 
+  facet_wrap(~location+diseases, ncol = 4) +
+  geom_line(aes(y = -(d2W_dd2)*(1/W^1), color = type)) +
+  geom_ribbon(aes(ymax = -(d2W_dd2)*(1/W^1), ymin = -(d2W_dd2_sum)*(1/W^1), fill = type), alpha = 0.5) + 
+  guides(fill="none") +   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + 
+  labs(x = "Disease Eradication", color = "Effect", y = expression(-frac(partialdiff^2~W,partialdiff~er[i]^2)~ frac(1,W)))
+ggsave("figures/derivatives/W_elast_2.pdf", width = 8, height = 6)
+
+
+elast_df %>%
+  filter(location %in% c("Global", "Low Income", "High Income")) %>% 
+  mutate(type = str_to_title(type)) %>%  
+  ggplot(aes(x = eradication)) + theme_bw() + 
+  facet_wrap(~location+diseases, ncol = 4, scales = "free_y") +
+  geom_line(aes(y = -(d2W_dd2)*(1/W^1), color = type)) +
+  geom_ribbon(aes(ymax = -(d2W_dd2)*(1/W^1), ymin = -(d2W_dd2_sum)*(1/W^1), fill = type), alpha = 0.5) + 
+  guides(fill="none") +   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + 
+  labs(x = "Disease Eradication", color = "Effect", y = expression(-frac(partialdiff^2~W,partialdiff~er[i]^2)~ frac(1,W)))
+ggsave("figures/derivatives/W_elast_2_freey.pdf", width = 8, height = 6)
+
+
+
+
+elast_df %>%
+  filter(location == "Global") %>% 
+  ggplot(aes(x = eradication)) + theme_bw() + 
+  facet_wrap(~location+diseases, ncol = 4) +
+  geom_line(aes(y = -(d2W_dd2)*(1/W), color = type)) +
+  geom_ribbon(aes(ymax = -(d2W_dd2)*(1/W), ymin = -(d2W_dd2_sum)*(1/W), fill = type), alpha = 0.5) + 
+  labs(x = "Disease Eradication", y = "dW_der/W_lag", color = "Effect")
+
+
+
+elast_df %>%
+  filter(location == "Global") %>% 
+  ggplot(aes(x = eradication)) + theme_bw() + 
+  facet_wrap(~location+diseases, ncol = 4) +
+  geom_line(aes(y = -(d2W_dd2)*(erad^2/W^2), color = type)) +
+  geom_ribbon(aes(ymax = -(d2W_dd2)*(erad^2/W^2), ymin = -(d2W_dd2_sum)*(erad^2/W^2), fill = type), alpha = 0.5) + 
+  labs(x = "Disease Eradication", y = "dW_der/W_lag", color = "Effect")
+
+
+
+elast_df %>%
+  filter(location == "Global") %>% 
+  ggplot(aes(x = eradication)) + theme_bw() + 
+  facet_wrap(~location+diseases, ncol = 4) +
+  geom_line(aes(y = W_elast_1, color = type)) +
+  geom_ribbon(aes(ymax = W_elast_1, ymin = W_elast_1_sum, fill = type), alpha = 0.5) + 
+  labs(x = "Disease Eradication", y = "Eradication elasticity of welfare", color = "Effect")
+
+elast_df %>%
+  filter(location == "Global") %>% 
+  ggplot(aes(x = eradication)) + theme_bw() + 
+  facet_wrap(~location+diseases, ncol = 4) +
+  geom_line(aes(y = -W_elast_2, color = type)) +
+  geom_ribbon(aes(ymax = -W_elast_2, ymin = -W_elast_2_sum, fill = type), alpha = 0.5) + 
+  labs(x = "Disease Eradication", y = "Eradication second elasticity of welfare", color = "Effect")
+
+
+
+  
+  filter(location == "World Bank Lower Middle Income") %>%
+  ggplot() + theme_bw() + facet_wrap(~location+diseases, scales = "free_y", ncol = 4) +  
+  geom_line(aes(x = eradication, y = dW_dd/W_lag, color = type))# +
+  #geom_line(aes(x = eradication, y = dW_dd_sum/W_lag, color = "Sum"), linetype = "dashed")
+  
+hessian_df %>%
+  filter(location == "World Bank Lower Middle Income") %>%
+  ggplot() + theme_bw() + facet_wrap(~location+diseases, scales = "free_y", ncol = 4) +  
+  geom_line(aes(x = eradication, y = d2W_dd2/W_lag, color = type))
+
+hessian_df %>%
+  
+  
+
+
+
+
+  group_by(start_year, no_births, growth_transitions, diseases, location) %>%
+  pivot_wider(id_cols = c(start_year, no_births, growth_transitions, eradication, diseases, location),
+              names_from = type, values_from = c(W, Wnewborn)) %>%
+  
+  

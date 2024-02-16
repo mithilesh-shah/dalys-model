@@ -55,8 +55,8 @@ ggarrange(fert_plt, pop_plt, mort_plt, disab_plt, common.legend = T, nrow =1, le
 #ggsave("figures/rates_byregion.pdf", width = 12, height = 3)
 # Choose options
 start_year <- 2021
-end_year <- 2122
-end_age <- 100
+end_year <- start_year+125
+end_age <- 150
 no_births <- FALSE
 fertility_type <- "fertility_med"
 growth_transitions <- TRUE
@@ -77,7 +77,7 @@ if (loc_name == "Regions"){
 
 # Create mortality data, with growth transitions
 mortality_df <- create_mortality_df(all_mortality_df, loc_name = loc_name, start_year = 1990, end_year = end_year, 
-                                    end_age = end_age, growth_transitions = TRUE, 
+                                    end_age = 100, growth_transitions = TRUE, 
                                     income_transition_df = income_transition_df)
 mortality_df %>%
   #filter(year >2017, year<2023) %>%
@@ -85,7 +85,7 @@ mortality_df %>%
   geom_line(aes(x = age, y = log(mortality/1e5), group = year, color = year))
 # Create disability data, with growth transitions
 disability_df <- create_disability_df(all_disability_df, loc_name = loc_name, start_year = 1990, end_year = end_year, 
-                                    end_age = end_age, growth_transitions = TRUE, 
+                                    end_age = 100, growth_transitions = TRUE, 
                                     income_transition_df = income_transition_df)
 disability_df %>%
   ggplot() + facet_wrap(~location) + 
@@ -93,49 +93,6 @@ disability_df %>%
 
 
 
-"
-Growth vs no growth
-"
-forecasts_nogrowth <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "none",
-                                     start_year = 2021, end_year = end_year, end_age = end_age, 
-                                     no_births = no_births, fertility_type = "fertility_est", loc_name = loc_name,
-                                     growth_transitions = FALSE) %>% mutate(growth = "No Growth", fertility = "2021")
-forecasts_growth <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "none",
-                                   start_year = 2021, end_year = end_year, end_age = end_age, 
-                                   no_births = no_births, fertility_type = "fertility_est", loc_name = loc_name, 
-                                   growth_transitions = TRUE) %>% mutate(growth = "Growth", fertility = "2021")
-forecasts_both <- rbind(forecasts_nogrowth, forecasts_growth)
-forecasts_nogrowth <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "none",
-                                     start_year = 2021, end_year = end_year, end_age = end_age, 
-                                     no_births = no_births, fertility_type = "fertility_med", loc_name = loc_name,
-                                     growth_transitions = FALSE) %>% mutate(growth = "No Growth", fertility = "Medium")
-forecasts_growth <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "none",
-                                   start_year = 2021, end_year = end_year, end_age = end_age, 
-                                   no_births = no_births, fertility_type = "fertility_med", loc_name = loc_name, 
-                                   growth_transitions = TRUE) %>% mutate(growth = "Growth", fertility = "Medium")
-forecasts_both <- rbind(forecasts_both, forecasts_nogrowth, forecasts_growth)
-
-ggplot(forecasts_both) + theme_bw() + facet_wrap(vars(location, growth, fertility), scales = "free") + 
-  geom_line(aes(x = age, y = population, color = year, group = year)) + 
-  labs(x = "Age", y = "Population", color = "Year", title = loc_name)
-#ggsave(paste0("figures/growth_nogrowth_pop_",loc_name,".pdf"), width = 6, height = 5)
-
-
-"
-Forecasts under the baseline scenario
-"
-forecasts_base <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "none",
-                                 start_year = start_year, end_year = end_year, end_age = end_age, 
-                                 no_births = no_births, fertility_type = fertility_type, loc_name = loc_name, 
-                                 growth_transitions = growth_transitions)
-plot_df <- forecasts_base %>%
-  full_join(select(population_df, c(location, year, age, population))) %>% arrange(year, age) %>%
-  mutate(forecast = case_when(year > start_year  ~ "Forecast", year <= start_year  ~ "Estimate"))
-
-ggplot(filter(plot_df, year%%10 == 0), aes(x = age)) + theme_bw() + facet_wrap(~location)+
-  scale_linetype_manual("", values = c("Estimate" = "solid", "Forecast" = "dotted")) + 
-  geom_line(aes(y = population/1e6, group = as.character(year), color = year, linetype = forecast)) + 
-  labs(color = "Year") + xlab("Age") + ylab("Population (millions)") + ggtitle("Baseline")
 
 
 "
@@ -147,10 +104,16 @@ mortality_df$mortality_adult_early4 <- rowSums(mortality_df[,which(names(mortali
 mortality_df$mortality_adult_late4 <- rowSums(mortality_df[,which(names(mortality_df) %in% adult_late4_diseases)])
 mortality_df$mortality_senescent4 <- rowSums(mortality_df[,which(names(mortality_df) %in% senescent4_diseases)])
 
+# Disability due to each disease cluster
+disability_df$disability_infant4 <- rowSums(disability_df[,which(names(disability_df) %in% infant4_diseases)])
+disability_df$disability_adult_early4 <- rowSums(disability_df[,which(names(disability_df) %in% adult_early4_diseases)])
+disability_df$disability_adult_late4 <- rowSums(disability_df[,which(names(disability_df) %in% adult_late4_diseases)])
+disability_df$disability_senescent4 <- rowSums(disability_df[,which(names(disability_df) %in% senescent4_diseases)])
+
 # Play forward mortality based on exponential starting at 75
 mortality_df <- mortality_df %>% 
   full_join(crossing(location = unique(mortality_df$location), year = unique(mortality_df$year),
-           sex_name = unique(mortality_df$sex_name), age = 0:500)) %>%
+                     sex_name = unique(mortality_df$sex_name), age = 0:150)) %>%
   arrange(location, year, sex_name, age) %>%
   group_by(location, year, sex_name) %>%
   # Only use the trend from 75 onwards
@@ -179,25 +142,28 @@ mortality_df <- mortality_df %>%
             log_mortality_senescent4, beta1, beta0)) %>%
   # Add in the projections
   mutate(mortality_infant4_proj = case_when(age <= 100 ~ mortality_infant4, 
-                                          age > 100 ~ mortality_infant4_fit)) %>%
+                                            age > 100 ~ mortality_infant4_fit)) %>%
   mutate(mortality_adult_early4_proj = case_when(age <= 100 ~ mortality_adult_early4, 
-                                               age > 100 ~ mortality_adult_early4_fit)) %>%
+                                                 age > 100 ~ mortality_adult_early4_fit)) %>%
   mutate(mortality_adult_late4_proj = case_when(age <= 100 ~ mortality_adult_late4, 
-                                               age > 100 ~ mortality_adult_late4_fit)) %>%
+                                                age > 100 ~ mortality_adult_late4_fit)) %>%
   mutate(mortality_senescent4_proj = case_when(age <= 100 ~ mortality_senescent4, 
                                                age > 100 ~ mortality_senescent4_fit)) %>%
-  relocate(year, sex_name, age, mortality, 
+  mutate(mortality_proj = mortality_infant4_proj+mortality_adult_early4_proj+mortality_adult_late4_proj+
+           mortality_senescent4_proj) %>%
+  relocate(year, sex_name, age, mortality, mortality_proj,
            mortality_infant4, mortality_infant4_fit, mortality_infant4_proj,
            mortality_adult_early4, mortality_adult_early4_fit, mortality_adult_early4_proj,
            mortality_adult_late4, mortality_adult_late4_fit, mortality_adult_late4_proj,
            mortality_senescent4, mortality_senescent4_fit, mortality_senescent4_proj,
-           .after = location) 
+           .after = location) %>%
+  ungroup() 
 
 
 # Play forward disability based on exponential starting at 75
 disability_df <- disability_df %>% 
   full_join(crossing(location = unique(disability_df$location), year = unique(disability_df$year),
-                     sex_name = unique(disability_df$sex_name), age = 0:500)) %>%
+                     sex_name = unique(disability_df$sex_name), age = 0:150)) %>%
   arrange(location, year, sex_name, age) %>%
   group_by(location, year, sex_name) %>%
   # Only use the trend from 75 onwards
@@ -226,24 +192,27 @@ disability_df <- disability_df %>%
             log_disability_senescent4, beta1, beta0)) %>%
   # Add in the projections
   mutate(disability_infant4_proj = case_when(age <= 100 ~ disability_infant4, 
-                                            age > 100 ~ disability_infant4_fit)) %>%
+                                             age > 100 ~ disability_infant4_fit)) %>%
   mutate(disability_adult_early4_proj = case_when(age <= 100 ~ disability_adult_early4, 
-                                                 age > 100 ~ disability_adult_early4_fit)) %>%
+                                                  age > 100 ~ disability_adult_early4_fit)) %>%
   mutate(disability_adult_late4_proj = case_when(age <= 100 ~ disability_adult_late4, 
-                                                age > 100 ~ disability_adult_late4_fit)) %>%
+                                                 age > 100 ~ disability_adult_late4_fit)) %>%
   mutate(disability_senescent4_proj = case_when(age <= 100 ~ disability_senescent4, 
-                                               age > 100 ~ disability_senescent4_fit)) %>%
-  relocate(year, sex_name, age, disability, 
+                                                age > 100 ~ disability_senescent4_fit)) %>%
+  mutate(disability_proj = disability_infant4_proj+disability_adult_early4_proj+disability_adult_late4_proj+
+           disability_senescent4_proj) %>%
+  relocate(year, sex_name, age, disability, disability_proj,
            disability_infant4, disability_infant4_fit, disability_infant4_proj,
            disability_adult_early4, disability_adult_early4_fit, disability_adult_early4_proj,
            disability_adult_late4, disability_adult_late4_fit, disability_adult_late4_proj,
            disability_senescent4, disability_senescent4_fit, disability_senescent4_proj,
-           .after = location) 
+           .after = location)  %>%
+  ungroup() 
 
 
 # Plot the mortality projections
 p1 <- mortality_df %>%
-  filter(year == 2021 & age < 170) %>%
+  filter(year == 2021 & age < 150) %>%
   ggplot() + theme_bw() + facet_wrap(~location) +
   geom_hline(aes(yintercept = log(1e5)), linetype = "dashed") +
   geom_line(aes(x = age, log(mortality_senescent4_fit), color = "Ageing-related"), linetype = "dashed") + 
@@ -257,7 +226,7 @@ p1 <- mortality_df %>%
   scale_color_manual(values = cluster_cols) + 
   labs(x = "Age", y = "log mortality", color = "Category", title = "Mortality")
 p2 <- disability_df %>%
-  filter(year == 2021 & age < 170) %>%
+  filter(year == 2021 & age < 150) %>%
   ggplot() + theme_bw() + facet_wrap(~location) +
   geom_hline(aes(yintercept = log(1e5)), linetype = "dashed") +
   geom_line(aes(x = age, log(disability_senescent4_fit), color = "Ageing-related"), linetype = "dashed") + 
@@ -275,70 +244,21 @@ ggsave("figures/clustering/log_rates_proj.pdf", width = 10, height = 6)
 
 
 
-
-
-  
-x %>%
-  filter(year == 2021, location == locations[2]) %>%
-  group_by(location, year, sex_name) %>%
-  mutate(age_NAs = case_when(age >= 50 & age <= 100 ~ age)) %>%
-  mutate(log_mortality_senescent4 = case_when(age >= 50 ~ log(mortality_senescent4))) %>%
-  mutate(beta1 = cov(log_mortality_senescent4, age_NAs, use = "pairwise.complete.obs")/var(age_NAs, na.rm = T)) %>%
-  mutate(beta0 = mean(log_mortality_senescent4, na.rm = T) - beta1*mean(age_NAs, na.rm = T)) %>%
-  mutate(log_mortality_senescent4 = beta0 + beta1*age) %>% 
-  mutate(mortality_senescent4_new = case_when(age <= 100 ~ mortality_senescent4, 
-                                              age > 100 ~ exp(log_mortality_senescent4))) %>%
-  mutate(mortality_senescent4_new = case_when(mortality_senescent4_new > 100000 ~ 100000,
-                                              TRUE ~ mortality_senescent4_new)) %>%
-  filter(year == 2021) %>%
-  ggplot() + theme_bw() + facet_wrap(~location) +
-  geom_point(aes(x = age_NAs, y = mortality_senescent4)) +
-  geom_line(aes(x = age, (mortality_senescent4), color = "senescent4")) + 
-  geom_point(aes(x = age, (mortality_senescent4_new), color = "senescent4")) + 
-  geom_line(aes(x = age, (mortality_infant4), color = "infant4")) + 
-  geom_line(aes(x = age, (mortality_adult_early4), color = "adult_early4")) + 
-  geom_line(aes(x = age, (mortality_adult_late4), color = "adult_late4"))
-
-
-
-# Disability due to each disease cluster
-disability_df$disability_infant4 <- rowSums(disability_df[,which(names(disability_df) %in% infant4_diseases)])
-disability_df$disability_adult_early4 <- rowSums(disability_df[,which(names(disability_df) %in% adult_early4_diseases)])
-disability_df$disability_adult_late4 <- rowSums(disability_df[,which(names(disability_df) %in% adult_late4_diseases)])
-disability_df$disability_senescent4 <- rowSums(disability_df[,which(names(disability_df) %in% senescent4_diseases)])
-
-
-mortality_df %>%
-  filter(year == 2021) %>%
-  ggplot() + theme_bw() + facet_wrap(~location) +
-  geom_line(aes(x = age, log(mortality_senescent4), color = "mortality_senescent4")) + 
-  geom_line(aes(x = age, log(mortality_infant4), color = "mortality_infant4")) + 
-  geom_line(aes(x = age, log(mortality_adult_early4), color = "mortality_adult_early4")) + 
-  geom_line(aes(x = age, log(mortality_adult_late4), color = "mortality_adult_late4"))
-
-
-
-disability_df %>%
-  filter(year == 2021) %>%
-  ggplot() + theme_bw() + facet_wrap(~location) +
-  geom_line(aes(x = age, log(disability_senescent4), color = "disability_senescent4")) + 
-  geom_line(aes(x = age, log(disability_infant4), color = "disability_infant4")) + 
-  geom_line(aes(x = age, log(disability_adult_early4), color = "disability_adult_early4")) + 
-  geom_line(aes(x = age, log(disability_adult_late4), color = "disability_adult_late4"))
-
-"
-What does reducing a disease look like?
-"
-mortality_df %>%
+mortality_df %>% ungroup() %>%
   filter(location == "World Bank Lower Middle Income", year == 2021) %>%
-  mutate(Total = mortality) %>%
-  select(age, Total, mortality_infant4, mortality_adult_early4, mortality_adult_late4, mortality_senescent4) %>%
+  mutate(Total = mortality_proj) %>%
+  select(age, Total, mortality_infant4_proj, mortality_adult_early4_proj, 
+         mortality_adult_late4_proj, mortality_senescent4_proj) %>%
   pivot_longer(cols = -c(age, Total)) %>%
-  rbind(disability_df %>% 
+  rbind(disability_df %>% ungroup() %>%
           filter(location == "World Bank Lower Middle Income", year == 2021) %>%
-          mutate(Total = disability) %>%
-          select(age, Total, disability_infant4, disability_adult_early4, disability_adult_late4, disability_senescent4) %>%
+          mutate(Total = disability_proj) %>%
+          select(age, Total, disability_infant4_proj, disability_adult_early4_proj,
+                 disability_adult_late4_proj, disability_senescent4_proj) %>%
           pivot_longer(cols = -c(age, Total))) %>%
+  mutate(proj = case_when(age > 100 ~ 0.5, TRUE ~ 1)) %>%
+  mutate(value = case_when(Total > 1e5 ~ NA_real_, TRUE ~ value)) %>%
+  group_by(name) %>% fill(value, .direction = "down") %>%
   mutate(value = value/1e5, Total = Total/1e5,
          variable = case_when(str_detect(name, "disability") ~ "Disability", TRUE ~ "Mortality"),
          cluster = case_when(str_detect(name, "infant4") ~ "Infant",
@@ -347,20 +267,95 @@ mortality_df %>%
                              str_detect(name, "senescent4") ~ "Ageing-related", TRUE ~ "All")) %>%
   ggplot(aes(x = age)) + theme_bw() + facet_wrap(~ variable) + 
   geom_line(aes(y = Total)) +
-  geom_bar(aes(y = value, fill = cluster), stat = "identity", position = "stack") +
+  geom_bar(aes(y = value, fill = cluster, alpha = proj), stat = "identity", position = "stack") +
   scale_fill_manual("Region", values = cluster_cols) + 
-  labs()
+  scale_alpha(guide="none", range = c(0.5, 1)) +
+  lims(y = c(0,1))
+ggsave("figures/clustering/projected_decomp.pdf", width = 8, height = 3.5)
+
+
+
+"
+Growth vs no growth
+"
+forecasts_nogrowth <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "none",
+                                     start_year = 2021, end_year = end_year, end_age = end_age, 
+                                     no_births = no_births, fertility_type = "fertility_est", loc_name = loc_name,
+                                     growth_transitions = FALSE, project_100plus = TRUE) %>% 
+  mutate(growth = "No Growth", fertility = "2021")
+forecasts_growth <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "none",
+                                   start_year = 2021, end_year = end_year, end_age = end_age, 
+                                   no_births = no_births, fertility_type = "fertility_est", loc_name = loc_name, 
+                                   growth_transitions = TRUE, project_100plus = TRUE) %>% 
+  mutate(growth = "Growth", fertility = "2021")
+forecasts_both <- rbind(forecasts_nogrowth, forecasts_growth)
+forecasts_nogrowth <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "none",
+                                     start_year = 2021, end_year = end_year, end_age = end_age, 
+                                     no_births = no_births, fertility_type = "fertility_med", loc_name = loc_name,
+                                     growth_transitions = FALSE, project_100plus = TRUE) %>% 
+  mutate(growth = "No Growth", fertility = "Medium")
+forecasts_growth <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "none",
+                                   start_year = 2021, end_year = end_year, end_age = end_age, 
+                                   no_births = no_births, fertility_type = "fertility_med", loc_name = loc_name, 
+                                   growth_transitions = TRUE, project_100plus = TRUE) %>% 
+  mutate(growth = "Growth", fertility = "Medium")
+forecasts_both <- rbind(forecasts_both, forecasts_nogrowth, forecasts_growth)
+
+ggplot(forecasts_both) + theme_bw() + facet_wrap(vars(location, growth, fertility), scales = "free") + 
+  geom_line(aes(x = age, y = population, color = year, group = year)) + 
+  labs(x = "Age", y = "Population", color = "Year", title = loc_name)
+#ggsave(paste0("figures/growth_nogrowth_pop_",loc_name,".pdf"), width = 6, height = 5)
+
+
+"
+Forecasts under the baseline scenario
+"
+mortality_df <- mortality_df %>%
+  mutate(mortality_new = mortality - 0.5*mortality_senescent4,
+         mortality_proj_new = mortality_proj - 0.5*mortality_senescent4_proj)
+disability_df <- disability_df %>%
+  mutate(disability_new = disability - 0.5*disability_senescent4,
+         disability_proj_new = disability_proj - 0.5*disability_senescent4_proj)
+
+forecasts_base <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, new = "none",
+                                 start_year = 2021, end_year = end_year, end_age = end_age, 
+                                 no_births = no_births, fertility_type = fertility_type, loc_name = loc_name, 
+                                 growth_transitions = growth_transitions, project_100plus = TRUE)
+
+forecasts_base %>%
+  group_by(location) %>%
+  mutate(newborn = case_when(year - start_year - age == 0 ~ 1, TRUE ~ 0)) %>%
+  summarise(W = sum(daly), Wnewborn = sum(daly*newborn))
   
 
+sy <- min(forecasts_mort$year)
+forecasts_mort %>%
+  full_join(select(filter(population_df, year < sy), c(location, year, age, population))) %>% 
+              arrange(year, age) %>%
+  tibble() %>%
+  mutate(forecast = case_when(year > sy  ~ "Forecast", year <= sy  ~ "Estimate")) %>%
+  filter(year%%10 == 0) %>%
+  ggplot(aes(x = age)) + theme_bw() + facet_wrap(~location, scales = "free_y")+
+  scale_linetype_manual("", values = c("Estimate" = "solid", "Forecast" = "dotted")) + 
+  geom_line(aes(y = population/1e6, group = as.character(year), color = year, linetype = forecast)) + 
+  labs(color = "Year") + xlab("Age") + ylab("Population (millions)") + ggtitle("Baseline")
+
+
+
+"
+What does reducing a disease look like?
+"
 mortality_df %>%
   filter(location == "World Bank Lower Middle Income", year == 2021) %>%
-  mutate(Total = mortality) %>%
-  select(age, Total, mortality_infant4, mortality_adult_early4, mortality_adult_late4, mortality_senescent4) %>%
+  mutate(Total = mortality_proj) %>%
+  select(age, Total, mortality_infant4_proj, mortality_adult_early4_proj, 
+         mortality_adult_late4_proj, mortality_senescent4_proj) %>%
   pivot_longer(cols = -c(age, Total)) %>%
   rbind(disability_df %>% 
           filter(location == "World Bank Lower Middle Income", year == 2021) %>%
-          mutate(Total = disability) %>%
-          select(age, Total, disability_infant4, disability_adult_early4, disability_adult_late4, disability_senescent4) %>%
+          mutate(Total = disability_proj) %>%
+          select(age, Total, disability_infant4_proj, disability_adult_early4_proj, 
+                 disability_adult_late4_proj, disability_senescent4_proj) %>%
           pivot_longer(cols = -c(age, Total))) %>%
   mutate(value = value/1e5, Total = Total/1e5,
          variable = case_when(str_detect(name, "disability") ~ "Disability", TRUE ~ "Mortality"),
@@ -377,8 +372,9 @@ mortality_df %>%
   ggplot(aes(x = age)) + theme_bw() + 
   theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
   facet_wrap(~variable+cluster, nrow = 2, scales = "free_y") + 
-  geom_line(aes(y = log(Total)), color = "black") +
-  geom_line(aes(y = log(value_new), color = scenario), linetype = "dashed") +
+  geom_hline(aes(yintercept = log(1)), linetype = "dashed") +
+  geom_line(aes(y = log(pmin(Total, 1))), color = "black") +
+  geom_line(aes(y = log(pmin(value_new,1)), color = scenario), linetype = "dashed") +
   scale_color_manual("Scenario", values = c("red4", "red3", "red2", "red1")) + 
   labs(x = "Age", y = "log scale")
 ggsave("figures/scenarios/eradicating_disease.pdf", width = 10, height = 6)
@@ -416,358 +412,100 @@ dalys_compare %>%
 Systematically go through some options
 "
 # Options
-start_years <- c(1990, 2005, 2021)
+start_years <- c(1990, 2021)
 categories <- c("infant4", "adult_early4", "adult_late4", "senescent4")
-erad_opts <- seq(0.1,1,0.1)
+erad_opts <- seq(-0.05,1,0.01)
 grwth_opts <- c(FALSE, TRUE)
-birth_opts <- c(FALSE, TRUE)
+birth_opts <- FALSE #c(FALSE, TRUE)
 
 # Convert to dataframes as tibbles don't cooperate...
 mortality_data <- mortality_df %>%
-  select(location, year, age_name, age, mortality, mortality_infant4, mortality_adult_early4,
-         mortality_adult_late4, mortality_senescent4) %>%
+  select(location, year, age_name, age, mortality, mortality_proj, 
+         mortality_infant4, mortality_infant4_proj, mortality_adult_early4, mortality_adult_early4_proj,
+         mortality_adult_late4_proj, mortality_adult_late4_proj, mortality_senescent4, mortality_senescent4_proj) %>%
   as.data.frame()
 disability_data <- disability_df %>%
-  select(location, year, age_name, age, disability, disability_infant4, disability_adult_early4,
-         disability_adult_late4, disability_senescent4) %>%
+  select(location, year, age_name, age, disability, disability_proj,
+         disability_infant4, disability_infant4_proj, disability_adult_early4, disability_adult_early4_proj,
+         disability_adult_late4, disability_adult_late4_proj, disability_senescent4, disability_senescent4_proj) %>%
   as.data.frame()
 
 
 
 # Compare to benchmark
 sy <- start_years[1]
-cat <- categories[1]
+cat <- categories[4]
 erad <- erad_opts[1]
 grwth <- grwth_opts[1]
 brth <- birth_opts[1]
 # loop over combos
-dalys_scenarios <- tibble()
+full_scenarios <- tibble()
+W_scenarios <- tibble()
 # Change the start year
 for (sy in start_years){
-  # Which disease category
-  for (cat in categories){
-    # How much to eradicate
-    for (erad in erad_opts){
-      # Include economic growth
-      for (grwth in grwth_opts){
-        # Include new births
-        for (brth in birth_opts){
+  # Include economic growth
+  for (grwth in grwth_opts){
+    # Include new births
+    for (brth in birth_opts){
+      # Which disease category
+      for (cat in categories){
+        # How much to eradicate of that disease
+        for (erad in erad_opts){
           # Progress update
           print(str_c("Start year ", sy, ", diseases ", cat, ", eradicating ", erad, ", growth ", grwth, 
                       ", no births ", brth))
           # Define new mortality and disabilty fns
-          mortality_data$mortality_new <- mortality_data$mortality - erad*mortality_data[,str_c("mortality_",cat)]
-          disability_data$disability_new <- disability_data$disability - erad*disability_data[,str_c("disability_",cat)]
+          mortality_data$mortality_proj_new <- mortality_data$mortality_proj - erad*mortality_data[,str_c("mortality_",cat, "_proj")]
+          disability_data$disability_proj_new <- disability_data$disability_proj - erad*disability_data[,str_c("disability_",cat, "_proj")]
+          
+          
+          # Forecast eradicating on both mortality and disability
+          forecasts_both <- forecast_dalys(population_df, fertility_df, mortality_data, disability_data, new = "both",
+                                           start_year = sy, end_year = sy+125, end_age = end_age, 
+                                           no_births = brth, fertility_type = "fertility_med", loc_name = "Regions", 
+                                           growth_transitions = grwth, project_100plus = TRUE) %>% 
+            mutate(start_year = sy, no_births = brth, growth_transitions = grwth, eradication = erad, diseases = cat, type = "both") %>%
+            select(start_year, no_births, growth_transitions, eradication, diseases, type, location, year, age, population, daly)
+          # Forecast eradicating on just mortality
+          forecasts_mort <- forecast_dalys(population_df, fertility_df, mortality_data, disability_data, new = "mortality",
+                                           start_year = sy, end_year = sy+125, end_age = end_age, 
+                                           no_births = brth, fertility_type = "fertility_med", loc_name = "Regions", 
+                                           growth_transitions = grwth, project_100plus = TRUE) %>% 
+            mutate(start_year = sy, no_births = brth, growth_transitions = grwth, eradication = erad, diseases = cat, type = "mortality") %>%
+            select(start_year, no_births, growth_transitions, eradication, diseases, type, location, year, age, population, daly)
+          # Forecast eradicating on just disability
+          forecasts_disab <- forecast_dalys(population_df, fertility_df, mortality_data, disability_data, new = "disability",
+                                           start_year = sy, end_year = sy+125, end_age = end_age, 
+                                           no_births = brth, fertility_type = "fertility_med", loc_name = "Regions", 
+                                           growth_transitions = grwth, project_100plus = TRUE) %>% 
+            mutate(start_year = sy, no_births = brth, growth_transitions = grwth, eradication = erad, diseases = cat, type = "disability") %>%
+            select(start_year, no_births, growth_transitions, eradication, diseases, type, location, year, age, population, daly)
+          
+          full_scenarios <- rbind(forecasts_both, forecasts_mort, forecasts_disab)
+           
+          full_scenarios %>%
+            mutate(newborn = case_when(year - start_year - age == 0 ~ 1, TRUE ~ 0)) %>%
+            group_by(start_year, no_births, growth_transitions, eradication, diseases, type, location) %>%
+            summarise(W = sum(daly), Wnewborn = sum(daly*newborn))
+          
           # Compare scenarios
-          dalys_compare <- compare_forecasts(population_df, fertility_df, mortality_data, disability_data, 
-                                             loc_name = "Regions", start_year = sy, end_year = sy+100, 
-                                             no_births = brth,  fertility_type = "fertility_med", 
-                                             growth_transitions = grwth)
-          dalys_scenario <- dalys_compare %>% 
-            mutate(start_year = sy, no_births = brth, growth_transitions = grwth, eradication = erad, diseases = cat) %>%
-            select(start_year, no_births, growth_transitions, eradication, diseases, location, year, 
-                   population_base, population_new, population_mort, population_dis, daly_base, daly_new, daly_mort, daly_dis)
-          dalys_scenarios <- rbind(dalys_scenarios, dalys_scenario)
+          W_scenarios <- W_scenarios %>%
+            rbind(full_scenarios %>%
+                    mutate(newborn = case_when(year - start_year - age == 0 ~ 1, TRUE ~ 0)) %>%
+                    group_by(start_year, no_births, growth_transitions, eradication, diseases, type, location) %>%
+                    summarise(W = sum(daly), Wnewborn = sum(daly*newborn)))
         }
+        print("Saving file")
+        W_scenarios %>%
+          saveRDS("temp.rds")
       }
     }
-    print("Saving file")
-    dalys_scenarios %>%
-      write_rds("temp.rds")
   }
 }
 
-dalys_scenarios <- dalys_scenarios %>%
-  mutate(pop_diff = population_new - population_base, daly_diff = daly_new - daly_base,
-         pop_diff_mort = population_mort - population_base, daly_diff_mort = daly_mort - daly_base,
-         pop_diff_dis = population_dis - population_base, daly_diff_dis = daly_dis - daly_base) %>%
-  mutate(no_births = case_when(no_births == TRUE ~ "current population only", TRUE ~ "with new births"),
-         growth_transitions = case_when(growth_transitions == TRUE ~ "Economic Growth", TRUE ~ "No Growth"))
+W_scenarios %>%
+  saveRDS("figures/scenarios/W_scenarios.rds")
 
-dalys_scenarios %>%
-  saveRDS("clean_data/daly_scenarios.rds")
-
-dalys_scenarios <- readRDS("clean_data/daly_scenarios.rds")
-
-
-dalys_scenarios %>%
-  filter(growth_transitions == "Economic Growth" & no_births == "current population only" & 
-           start_year == 2021 & eradication == 0.5 & diseases == "senescent4") %>%
-  ggplot(aes(x = year)) + theme_bw() + facet_wrap(~location+no_births, nrow = 1) +
-  geom_line(aes(y = daly_diff/1e6), color = "black") +
-  geom_bar(aes(y = daly_diff/1e6, fill = "Complimentarity"), stat = "identity") +
-  geom_bar(aes(y = daly_diff_mort/1e6 + daly_diff_dis/1e6, fill = "Mortality"), stat = "identity") +
-  geom_bar(aes(y = daly_diff_dis/1e6, fill = "Disability"), stat = "identity") +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + 
-  labs(y = "Extra DALYs (millions)", x = "Year",  fill = "", title = "50% eradication of ageing-related")
-ggsave("figures/scenarios/example_complimentarity_senescent.pdf", width = 10, height = 3)
-
-dalys_scenarios %>%
-  filter(growth_transitions == "Economic Growth" & no_births == "current population only" & 
-           start_year == 2021 & eradication == 0.5 & diseases == "infant4") %>%
-  ggplot(aes(x = year)) + theme_bw() + facet_wrap(~location+no_births, nrow = 1) +
-  geom_line(aes(y = daly_diff/1e6), color = "black") +
-  geom_bar(aes(y = daly_diff/1e6, fill = "Complimentarity"), stat = "identity") +
-  geom_bar(aes(y = daly_diff_mort/1e6 + daly_diff_dis/1e6, fill = "Mortality"), stat = "identity") +
-  geom_bar(aes(y = daly_diff_dis/1e6, fill = "Disability"), stat = "identity") +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + 
-  labs(y = "Extra DALYs (millions)", x = "Year",  fill = "", title = "50% eradication of infant")
-ggsave("figures/scenarios/example_complimentarity_infant.pdf", width = 10, height = 3)
-
-
-daly_summary <- dalys_scenarios %>%
-  group_by(start_year, no_births, growth_transitions, eradication, diseases, location) %>%
-  summarise(daly_base = sum(daly_base), daly_new = sum(daly_new), daly_mort = sum(daly_mort), daly_dis = sum(daly_dis),
-            daly_diff = sum(daly_diff), daly_diff_mort = sum(daly_diff_mort), daly_diff_dis = sum(daly_diff_dis)) %>%
-  mutate(complimentarity = (daly_diff - daly_diff_mort - daly_diff_dis)/daly_diff)
-
-daly_summary %>%
-  mutate(location = str_remove(location, "World Bank ")) %>%
-  filter(growth_transitions == "Economic Growth") %>%
-  ggplot() + theme_bw() + 
-  facet_wrap(~no_births +location, nrow = 2, scales = "free_y") +
-  geom_line(aes(x = eradication, y = daly_base, color = diseases, linetype = factor(start_year))) +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + 
-  labs(y = "Extra DALYs (millions)", x = "Reduction", linetype = "Start year")
-ggsave("figures/scenarios/daly_diff_reduction.pdf", width = 10, height = 6)
-
-
-daly_summary %>%
-  mutate(location = str_remove(location, "World Bank ")) %>%
-  filter(growth_transitions == "Economic Growth") %>%
-  ggplot() + theme_bw() + 
-  facet_wrap(~no_births +location, nrow = 2, scales = "free_y") +
-  geom_line(aes(x = eradication, y = complimentarity, color = diseases, linetype = factor(start_year))) +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + 
-  labs(y = "Complimentarity", x = "Reduction", linetype = "Start year")
-ggsave("figures/scenarios/comp_reduction.pdf", width = 10, height = 6)
-
-
-
-
-dalys_scenarios %>%
-  mutate(location = str_remove(location, "World Bank ")) %>%
-  filter(growth_transitions == "Economic Growth" & 
-           start_year == 2021 & eradication == 1 ) %>%
-  ggplot(aes(x = year)) + theme_bw() + facet_wrap(~no_births+location, scales = "free_y", ncol = 4) +
-  geom_line(aes(y = daly_diff/1e9, color = diseases)) +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + 
-  labs(y = "Extra DALYs (billions)", x = "Year",  fill = "")
-ggsave("figures/scenarios/daly_diff_overtime.pdf", width = 10, height = 6)
-
-"
-Analyse range of scenarios
-"
-
-
-
-
-
-
-
-
-
-"
-Loop through each region
-"
-# Make sure the disease clusters are defined
-infant3_diseases <- cause_tree_df$cause_name[which(cause_tree_df$cluster3 == "Infant")] 
-adult3_diseases <- cause_tree_df$cause_name[which(cause_tree_df$cluster3 == "Adult")] 
-senescent3_diseases <- cause_tree_df$cause_name[which(cause_tree_df$cluster3 == "Senescent")] 
-infant4_diseases <- cause_tree_df$cause_name[which(cause_tree_df$cluster4 == "Infant")] 
-adult_early4_diseases <- cause_tree_df$cause_name[which(cause_tree_df$cluster4 == "Adult_early")] 
-adult_late4_diseases <- cause_tree_df$cause_name[which(cause_tree_df$cluster4 == "Adult_late")] 
-senescent4_diseases <- cause_tree_df$cause_name[which(cause_tree_df$cluster4 == "Senescent")] 
-# Control parameters here
-locations <- unique(all_mortality_df$location)
-fertility_types <- c("fertility_est", "fertility_low", "fertility_med", "fertility_high")
-start_year <- 2021
-end_year <- 2122
-end_age <- 100
-no_births <- FALSE
-fertility_type <- "fertility_med"
-growth_transitions <- TRUE
-
-results_df <- data.frame()
-for (loc_name in locations[2:5]){
-  print(paste0("Analysis for ", loc_name))
-  # Select which region to focus on and which years to use as a starting point
-  population_df <- filter(all_population_df, location == loc_name)
-  fertility_df <- filter(all_fertility_df, location == loc_name, year >= start_year)
-  mortality_df <- create_mortality_df(all_mortality_df, loc_name = loc_name, start_year = start_year, end_year = end_year, 
-                                      end_age = end_age, growth_transitions = growth_transitions, 
-                                      income_transition_df = income_transition_df)
-  disability_df <- create_disability_df(all_disability_df, loc_name = loc_name, start_year = start_year, end_year = end_year, 
-                                        end_age = end_age, growth_transitions = growth_transitions, 
-                                        income_transition_df = income_transition_df)
-  for (fertility_type in fertility_types){
-    print(paste0("Fertility assumption: ", fertility_type))
-    for (growth_transitions in c(FALSE, TRUE)){
-      # Remove infant diseases
-      mortality_df <- def_mortality_new(mortality_df, infant3_diseases)
-      disability_df <- def_disability_new(disability_df, infant3_diseases)
-      dalys_infant3 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
-                                         start_year = start_year, end_year = end_year, no_births = no_births,
-                                         fertility_type = fertility_type, growth_transitions = growth_transitions) %>%
-        mutate(location = loc_name, intervention = "Infant", fertility_type = fertility_type, 
-               clusters = "3", growth_trans = growth_transitions)
-      mortality_df <- def_mortality_new(mortality_df, infant4_diseases)
-      disability_df <- def_disability_new(disability_df, infant4_diseases)
-      dalys_infant4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
-                                         start_year = start_year, end_year = end_year, no_births = no_births,
-                                         fertility_type = fertility_type, growth_transitions = growth_transitions) %>%
-        mutate(location = loc_name, intervention = "Infant", fertility_type = fertility_type, 
-               clusters = "4", growth_trans = growth_transitions)
-      # Remove adult diseases
-      mortality_df <- def_mortality_new(mortality_df, adult3_diseases)
-      disability_df <- def_disability_new(disability_df, adult3_diseases)
-      dalys_adult3 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
-                                         start_year = start_year, end_year = end_year, no_births = no_births,
-                                         fertility_type = fertility_type, growth_transitions = growth_transitions) %>%
-        mutate(location = loc_name, intervention = "Adult", fertility_type = fertility_type, 
-               clusters = "3", growth_trans = growth_transitions)
-      mortality_df <- def_mortality_new(mortality_df, adult_early4_diseases)
-      disability_df <- def_disability_new(disability_df, adult_early4_diseases)
-      dalys_adult_early4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
-                                         start_year = start_year, end_year = end_year, no_births = no_births,
-                                         fertility_type = fertility_type, growth_transitions = growth_transitions) %>%
-        mutate(location = loc_name, intervention = "Adult_early", fertility_type = fertility_type, 
-               clusters = "4", growth_trans = growth_transitions)
-      mortality_df <- def_mortality_new(mortality_df, adult_late4_diseases)
-      disability_df <- def_disability_new(disability_df, adult_late4_diseases)
-      dalys_adult_late4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
-                                              start_year = start_year, end_year = end_year, no_births = no_births,
-                                              fertility_type = fertility_type, growth_transitions = growth_transitions) %>%
-        mutate(location = loc_name, intervention = "Adult_late", fertility_type = fertility_type, 
-               clusters = "4", growth_trans = growth_transitions)
-      # Remove senescent diseases
-      mortality_df <- def_mortality_new(mortality_df, senescent3_diseases)
-      disability_df <- def_disability_new(disability_df, senescent3_diseases)
-      dalys_senescent3 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
-                                         start_year = start_year, end_year = end_year, no_births = no_births,
-                                         fertility_type = fertility_type, growth_transitions = growth_transitions) %>%
-        mutate(location = loc_name, intervention = "Senescent", fertility_type = fertility_type, 
-               clusters = "3", growth_trans = growth_transitions)
-      mortality_df <- def_mortality_new(mortality_df, senescent4_diseases)
-      disability_df <- def_disability_new(disability_df, senescent4_diseases)
-      dalys_senescent4 <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
-                                         start_year = start_year, end_year = end_year, no_births = no_births,
-                                         fertility_type = fertility_type, growth_transitions = growth_transitions) %>%
-        mutate(location = loc_name, intervention = "Senescent", fertility_type = fertility_type, 
-               clusters = "4", growth_trans = growth_transitions)
-      # Slow aging by 10%
-      mortality_df <- slow_mortality(mortality_df, slow_by = 0.1)
-      disability_df <- slow_disability(disability_df, slow_by = 0.1)
-      dalys_slow_10pc <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
-                                           start_year = start_year, end_year = end_year, no_births = no_births,
-                                           fertility_type = fertility_type, growth_transitions = growth_transitions) %>% 
-        mutate(location = loc_name, intervention = "Slow_10pc", fertility_type = fertility_type, 
-               clusters = "NA", growth_trans = growth_transitions)
-      # Slow aging by 25%
-      mortality_df <- slow_mortality(mortality_df, slow_by = 0.25)
-      disability_df <- slow_disability(disability_df, slow_by = 0.25)
-      dalys_slow_25pc <- compare_forecasts(population_df, fertility_df, mortality_df, disability_df, 
-                                           start_year = start_year, end_year = end_year, no_births = no_births,
-                                           fertility_type = fertility_type, growth_transitions = growth_transitions) %>% 
-        mutate(location = loc_name, intervention = "Slow_25pc", fertility_type = fertility_type, 
-               clusters = "NA", growth_trans = growth_transitions)
-      
-      # Append all results
-      results_df <- rbind(results_df, dalys_infant3, dalys_adult3, dalys_senescent3, 
-                          dalys_infant4, dalys_adult_early4, dalys_adult_late4, dalys_senescent4,
-                          dalys_slow_10pc, dalys_slow_25pc)
-    }
-  }
-}
-# Rearrange and make sure location is an ordered factor
-results_df <- relocate(results_df, location,intervention, fertility_type, clusters, .before = year)
-results_df <- results_df %>% 
-  mutate(loc_order = case_when(str_detect(location, "High")  ~ 1,
-                               str_detect(location, "Upper") ~ 2,
-                               str_detect(location, "Lower") ~ 3,
-                               str_detect(location, "Low ") ~ 4)) %>%
-  arrange(loc_order, intervention, fertility_type, clusters, year)
-results_df$location <- factor(results_df$location, levels = unique(results_df$location), ordered = T)
-
-
-
-global_results_df <- results_df %>%
-  filter(fertility_type == "fertility_med" & clusters != "3") %>% 
-  group_by(intervention, year, growth_trans) %>%
-  summarise(across(where(is.numeric), sum))
-
-ggplot(global_results_df, aes(x = year)) + theme_bw() + 
-  facet_wrap(vars(growth_trans)) +
-  scale_color_manual("Scenario", values = c("Senescent" = "firebrick1", "Adult_late" = "blue3", 
-                                            "Adult_early" = "cornflowerblue", "Infant" = "forestgreen", 
-                                            "Slow_10pc" = "darkgoldenrod3", "Slow_25pc" = "orange")) +
-  geom_line(aes(y = daly_diff/1e9, color = intervention)) + 
-  labs(x = "Year", y = "DALYs gained (billions)")
-ggsave("figures/global_dalys_GvNG.pdf", width = 7, height = 3)
-
-# Plot dalys over time for baseline case
-glob_plt <- ggplot(filter(global_results_df,growth_trans == TRUE), aes(x = year)) + theme_bw() + 
-  scale_color_manual("Scenario", values = c("Senescent" = "firebrick1", "Adult_late" = "blue3", 
-                                            "Adult_early" = "cornflowerblue", "Infant" = "forestgreen", 
-                                            "Slow_10pc" = "darkgoldenrod3", "Slow_25pc" = "orange")) +
-  geom_line(aes(y = daly_diff/1e9, color = intervention)) + 
-  labs(x = "Year", y = "DALYs gained (billions)")
-
-reg_plt <- ggplot(filter(results_df,growth_trans == TRUE & fertility_type == "fertility_med" &
-                           clusters != "3"), aes(x = year)) + 
-  theme_bw() + facet_wrap(.~location, nrow = 2, scales = "free") +
-  scale_color_manual("Scenario", values = c("Senescent" = "firebrick1", "Adult_late" = "blue3", 
-                                            "Adult_early" = "cornflowerblue", "Infant" = "forestgreen", 
-                                            "Slow_10pc" = "darkgoldenrod3", "Slow_25pc" = "orange")) +
-  geom_line(aes(y = daly_diff/1e9, color = intervention)) + 
-  labs(x = "Year", y = "DALYs gained (billions)")
-
-ggarrange(glob_plt, reg_plt + ylab(""), common.legend = TRUE, widths = c(0.35, 0.65), 
-          legend = "right")
-ggsave("figures/global_dalys_overtime.pdf", width = 10, height = 4)
-
-
-baseline_results <- filter(results_df, clusters != "3" & fertility_type == "fertility_med" &
-                             growth_trans == TRUE)
-
-ggplot(filter(global_results_df,growth_trans == TRUE), aes(x = year)) + theme_bw() + 
-  facet_wrap(.~ intervention, scales = "free") +
-  #geom_line(aes(y = daly_diff/1e6), color = "black") +
-  geom_bar(aes(y = daly_diff/1e6, fill = "Complimentarity", group = intervention), stat = "identity") +
-  geom_bar(aes(y = daly_diff_mort/1e6 + daly_diff_dis/1e6, fill = "Mortality"), stat = "identity") +
-  geom_bar(aes(y = daly_diff_dis/1e6, fill = "Disability"), stat = "identity") +
-  labs(y = "Extra DALYs (millions)", x = "Year", title = "", fill = "")
-ggsave("figures/global_dalys_compliment.pdf", width = 8, height = 4)
-
-
-ggplot(baseline_results) + theme_bw() +
-  #facet_wrap(.~fertility_type) +
-  geom_bar(aes(x = intervention, y = daly_diff/1e9, fill = location), stat = "summary", fun = "sum") +
-  scale_fill_manual("Region", values = loc_cols) + 
-  scale_color_manual("Region", values = loc_cols) + 
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
-  labs(y = "Extra DALYs (billions)", x = "Secnario", fill = "")
-ggsave("figures/global_dalys_byregion.pdf", width = 5, height = 3)
-
-
-
-
-
-
-plot_df <- filter(results_df,growth_trans == TRUE & clusters != "3" &
-                    fertility_type %in% c("fertility_med", "fertility_est")) %>%
-  mutate(fertility_type = case_when(fertility_type == "fertility_med"  ~ "Medium variant", 
-                                    fertility_type == "fertility_est"  ~ "2021 rates"))
-
-
-ggplot(plot_df, aes(x = year)) + theme_bw() + 
-  facet_wrap(.~fertility_type + location , nrow = 2, scales = "free") +
-  scale_color_manual("Scenario", values = c("Senescent" = "firebrick1", "Adult_late" = "blue3", 
-                                            "Adult_early" = "cornflowerblue", "Infant" = "forestgreen", 
-                                            "Slow_10pc" = "darkgoldenrod3", "Slow_25pc" = "orange")) +
-  geom_line(aes(y = daly_diff/1e9, color = intervention)) + 
-  labs(x = "Year", y = "DALYs gained (billions)")
-ggsave("figures/fertility_type_byregion.pdf", width = 12, height = 4.5)
 
 
 

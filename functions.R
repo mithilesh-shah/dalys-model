@@ -169,13 +169,26 @@ def_disability_new <- function(disability_df, disease_list, remove_prop = 1){
 Forecast dalys from start_year to end_year given population, fertility, mortality and disability
 "
 forecast_dalys <- function(population_df, fertility_df, mortality_df, disability_df, 
-                         new_vars = "none", start_year = 2021, end_year = 2100, end_age = 100, 
+                         new_vars = "none", start_year = 2021, end_year = 2100, end_age = 150, 
                          no_births = FALSE, fertility_type = "fertility_est", loc_name = "Regions",
-                         growth_transitions = FALSE){
+                         growth_transitions = FALSE, project_100plus = TRUE){
   population_df1 <- data.frame(population_df)
   fertility_df1 <- data.frame(fertility_df)
   mortality_df1 <- data.frame(mortality_df)
   disability_df1 <- data.frame(disability_df)
+  
+  if (project_100plus){
+    # Make sure the rates don't exceed 1
+    mortality_df1$mortality <- pmin(mortality_df1$mortality_proj, 1e5)
+    if ("mortality_proj_new" %in% names(mortality_df1)){
+      mortality_df1$mortality_new <- pmin(mortality_df1$mortality_proj_new, 1e5)
+    }
+    disability_df1$disability <- pmin(disability_df1$disability_proj, 1e5)
+    if ("disability_proj_new" %in% names(disability_df1)){
+      disability_df1$disability_new <- pmin(disability_df1$disability_proj_new, 1e5)
+    }
+  }
+  
   # Set fertility rates according to fertility_type
   fertility_df1$fertility <- fertility_df1[,fertility_type]
   # If not using growth transitions, just use start_year data
@@ -233,6 +246,7 @@ forecast_dalys <- function(population_df, fertility_df, mortality_df, disability
                                       "World Bank Lower Middle Income", "World Bank Upper Middle Income"), 
                          year = start_year:end_year, age = 0:end_age)) %>%
       arrange(location, year, age) %>%
+      mutate(population = replace_na(population, 0)) %>%
       left_join(select(mortality_df1, c(location, year, age, mortality))) %>%
       left_join(select(disability_df1, c(location, year, age, disability))) %>%
       left_join(select(fertility_df1, c(location, year, age, fertility))) %>%
@@ -290,25 +304,26 @@ forecast_dalys <- function(population_df, fertility_df, mortality_df, disability
 Compare forecasts under mortality/disability and mortality_new/disability_new
 "
 compare_forecasts <- function(population_df, fertility_df, mortality_df, disability_df, loc_name = "Regions",
-                              start_year = 2021, end_year = 2100, end_age = 100, no_births = FALSE,
-                              fertility_type = "fertility_est", growth_transitions = FALSE){
+                              start_year = 2021, end_year = 2100, end_age = 150, no_births = FALSE,
+                              fertility_type = "fertility_est", growth_transitions = FALSE, 
+                              project_100plus = TRUE){
   # Calculate the forecast dalys for baseline and new 
   pop_baseline <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, 
                                  start_year = start_year, end_year = end_year, end_age = end_age, 
                                  no_births = no_births, new = "none", fertility_type = fertility_type, loc_name = loc_name, 
-                                 growth_transitions = growth_transitions)
+                                 growth_transitions = growth_transitions, project_100plus = project_100plus)
   pop_new <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, 
                             start_year = start_year, end_year = end_year, end_age = end_age, 
                             no_births = no_births, new = "both", fertility_type = fertility_type, loc_name = loc_name, 
-                            growth_transitions = growth_transitions)
+                            growth_transitions = growth_transitions, project_100plus = project_100plus)
   pop_mortonly <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, 
                             start_year = start_year, end_year = end_year, end_age = end_age, 
                             no_births = no_births, new = "mortality", fertility_type = fertility_type, loc_name = loc_name, 
-                            growth_transitions = growth_transitions)
+                            growth_transitions = growth_transitions, project_100plus = project_100plus)
   pop_disonly <- forecast_dalys(population_df, fertility_df, mortality_df, disability_df, 
                                  start_year = start_year, end_year = end_year, end_age = end_age, 
                                  no_births = no_births, new = "disability", fertility_type = fertility_type, loc_name = loc_name, 
-                                growth_transitions = growth_transitions)
+                                growth_transitions = growth_transitions, project_100plus = project_100plus)
   
   
   # Merge in the baseline and new
