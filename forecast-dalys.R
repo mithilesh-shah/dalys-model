@@ -328,19 +328,6 @@ forecasts_base %>%
   summarise(W = sum(daly), Wnewborn = sum(daly*newborn))
   
 
-sy <- min(forecasts_mort$year)
-forecasts_mort %>%
-  full_join(select(filter(population_df, year < sy), c(location, year, age, population))) %>% 
-              arrange(year, age) %>%
-  tibble() %>%
-  mutate(forecast = case_when(year > sy  ~ "Forecast", year <= sy  ~ "Estimate")) %>%
-  filter(year%%10 == 0) %>%
-  ggplot(aes(x = age)) + theme_bw() + facet_wrap(~location, scales = "free_y")+
-  scale_linetype_manual("", values = c("Estimate" = "solid", "Forecast" = "dotted")) + 
-  geom_line(aes(y = population/1e6, group = as.character(year), color = year, linetype = forecast)) + 
-  labs(color = "Year") + xlab("Age") + ylab("Population (millions)") + ggtitle("Baseline")
-
-
 
 "
 What does reducing a disease look like?
@@ -378,6 +365,36 @@ mortality_df %>%
   scale_color_manual("Scenario", values = c("red4", "red3", "red2", "red1")) + 
   labs(x = "Age", y = "log scale")
 ggsave("figures/scenarios/eradicating_disease.pdf", width = 10, height = 6)
+
+
+## These eradications pin down dmu/derr and dh/derr. 
+mortality_df %>%
+  filter(year == 2021) %>%
+  mutate(Total = mortality_proj) %>%
+  select(location, age, Total, mortality_infant4_proj, mortality_adult_early4_proj, 
+         mortality_adult_late4_proj, mortality_senescent4_proj) %>%
+  pivot_longer(cols = -c(location, age, Total)) %>%
+  rbind(disability_df %>% 
+          filter(year == 2021) %>%
+          mutate(Total = disability_proj) %>%
+          select(location, age, Total, disability_infant4_proj, disability_adult_early4_proj, 
+                 disability_adult_late4_proj, disability_senescent4_proj) %>%
+          pivot_longer(cols = -c(location, age, Total))) %>%
+  mutate(value = value/1e5, Total = Total/1e5,
+         variable = case_when(str_detect(name, "disability") ~ "Health", TRUE ~ "Mortality"),
+         cluster = case_when(str_detect(name, "infant4") ~ "Infant",
+                             str_detect(name, "adult_early4") ~ "Adult (early)",
+                             str_detect(name, "adult_late4") ~ "Adult (late)",
+                             str_detect(name, "senescent4") ~ "Ageing-related", TRUE ~ "All"),
+         cluster = factor(cluster, ordered = T, levels = c("Infant", "Adult (early)",  "Adult (late)", "Ageing-related"))) %>%
+  mutate(value = case_when(Total > 1.01 ~ 0, TRUE ~ value)) %>%
+  ggplot(aes(x = age)) + theme_bw() + 
+  facet_wrap(~variable+cluster, nrow = 2, scales = "free_y") + 
+  geom_hline(aes(yintercept = 0), linetype = "dashed") +
+  geom_line(aes(y = value, color = location)) +
+  labs(x = "Age", y = "Derivative wrt eradication", color = "Location")
+ggsave("figures/derivatives/dmu_der.pdf", width = 10, height = 6)
+
 
 "
 An example of removing some disease
