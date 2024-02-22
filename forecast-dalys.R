@@ -424,16 +424,104 @@ dalys_compare %>%
   
 
 
+"
+dN_dmu
+"
+# Convert to dataframes as tibbles don't cooperate...
+mortality_data <- mortality_df %>%
+  select(location, year, age_name, age, mortality, mortality_proj, 
+         mortality_infant4, mortality_infant4_proj, mortality_adult_early4, mortality_adult_early4_proj,
+         mortality_adult_late4_proj, mortality_adult_late4_proj, mortality_senescent4, mortality_senescent4_proj) %>%
+  as.data.frame()
+disability_data <- disability_df %>%
+  select(location, year, age_name, age, disability, disability_proj,
+         disability_infant4, disability_infant4_proj, disability_adult_early4, disability_adult_early4_proj,
+         disability_adult_late4, disability_adult_late4_proj, disability_senescent4, disability_senescent4_proj) %>%
+  as.data.frame()
+disability_data$disability_proj_new <- disability_data$disability_proj
+
+# Define new mortality and disabilty fns
+forecasts_base <- forecast_dalys(population_df, fertility_df, mortality_data, disability_data, new = "none",
+                                 start_year = 2021, end_year = 2146, end_age = end_age, 
+                                 no_births = FALSE, fertility_type = "fertility_med", loc_name = "Regions", 
+                                 growth_transitions = TRUE, project_100plus = TRUE)
+pops_base <- forecasts_base %>%
+  group_by(location, year) %>%
+  summarise(pop = sum(population))
+dN_dmu_results <- tibble()
+for (aa in 0:150){
+  print(str_c("Computing dN_Dmu for age ", aa))
+  mortality_data$mortality_proj_new <- mortality_data$mortality_proj
+  mortality_data$mortality_proj_new[which(mortality_data$age == aa)] <- 
+    mortality_data$mortality_proj[which(mortality_data$age == aa)] - 0.0001*mortality_data$mortality_proj[which(mortality_data$age == aa)]
+  
+  forecasts_both <- forecast_dalys(population_df, fertility_df, mortality_data, disability_data, new = "mortality",
+                                   start_year = 2021, end_year = 2021+125, end_age = end_age, 
+                                   no_births = FALSE, fertility_type = "fertility_med", loc_name = "Regions", 
+                                   growth_transitions = TRUE, project_100plus = TRUE) 
+  dN_dmu_results <- rbind(dN_dmu_results, 
+                          forecasts_both %>% mutate(age = aa) %>%
+                            group_by(location, year, age) %>%
+                            summarise(pop_new = sum(population)) %>%
+                            right_join(pops_base))
+}
+
+dN_dmu_results %>%
+  rbind(mutate(dN_dmu_results, location = "Global")) %>%
+  group_by(location, year, age) %>% 
+  summarise(pop_new = sum(pop_new), pop = sum(pop)) %>%
+  filter(year %in% c(2022, 2050, 2100), location %in%  c("Global", "World Bank High Income", "World Bank Low Income")) %>%
+  mutate(dN_dmu = pop_new - pop) %>%
+  ggplot() + theme_bw() + 
+  facet_wrap(~location, scales = "free_y") +
+  geom_line(aes(x = age, y = dN_dmu, color = factor(year)))
+ggsave("figures/derivatives/dN_dmu.pdf", width = 10, height = 4)
+
+
+
+
+forecasts_both <- forecast_dalys(population_df, fertility_df, mortality_data, disability_data, new = "both",
+                                 start_year = 2021, end_year = 2021+125, end_age = end_age, 
+                                 no_births = FALSE, fertility_type = "fertility_med", loc_name = "Regions", 
+                                 growth_transitions = TRUE, project_100plus = TRUE) %>% 
+  mutate(start_year = sy, no_births = brth, growth_transitions = grwth, eradication = erad, diseases = cat, type = "both") %>%
+  select(start_year, no_births, growth_transitions, eradication, diseases, type, location, year, age, population, daly)
+
+
+
+dalys_compare <- compare_forecasts(population_df, fertility_df, mortality_data, disability_data, loc_name = loc_name, 
+                                   start_year = 2021, end_year = end_year, no_births = TRUE,  project_100plus = TRUE,
+                                   fertility_type = fertility_type, growth_transitions = growth_transitions)
+dalys_compare %>%
+  ggplot(aes(x = year)) + theme_bw() + facet_wrap(~location) +
+  geom_line(aes(y = daly_diff/1e6), color = "black") +
+  geom_bar(aes(y = daly_diff/1e6, fill = "Complimentarity"), stat = "identity") +
+  geom_bar(aes(y = daly_diff_mort/1e6 + daly_diff_dis/1e6, fill = "Mortality"), stat = "identity") +
+  geom_bar(aes(y = daly_diff_dis/1e6, fill = "Disability"), stat = "identity") +
+  labs(y = "Extra DALYs (millions)", x = "Year", title = "Infant", fill = "")
+
+dalys_compare %>%
+  #filter(year %in% c(start_year, end_year)) %>%
+  select(location, year, LE_base, LE_new, LE_mort, LE_dis) %>%
+  ggplot() + theme_bw() + facet_wrap(~location) +
+  geom_line(aes(x = year, y = LE_base, color = "Base"))+
+  geom_line(aes(x = year, y = LE_new, color = "New"))+
+  geom_line(aes(x = year, y = LE_mort, color = "Mort"))+
+  geom_line(aes(x = year, y = LE_dis, color = "Dis"))
+
+
+
+
 
 "
 Systematically go through some options
 "
 # Options
-start_years <- c(1990, 2021)
+start_years <- c(2021)
 categories <- c("infant4", "adult_early4", "adult_late4", "senescent4")
 erad_opts <- seq(-0.05,1,0.01)
-grwth_opts <- c(FALSE, TRUE)
-birth_opts <- FALSE #c(FALSE, TRUE)
+grwth_opts <- TRUE # c(FALSE, TRUE)
+birth_opts <- FALSE # c(FALSE, TRUE)
 
 # Convert to dataframes as tibbles don't cooperate...
 mortality_data <- mortality_df %>%
@@ -459,58 +547,71 @@ brth <- birth_opts[1]
 full_scenarios <- tibble()
 W_scenarios <- tibble()
 # Change the start year
+ii<- 0
 for (sy in start_years){
   # Include economic growth
   for (grwth in grwth_opts){
     # Include new births
     for (brth in birth_opts){
       # Which disease category
-      for (cat in categories){
+      for (cat in categories[1:3]){
         # How much to eradicate of that disease
         for (erad in erad_opts){
-          # Progress update
-          print(str_c("Start year ", sy, ", diseases ", cat, ", eradicating ", erad, ", growth ", grwth, 
-                      ", no births ", brth))
-          # Define new mortality and disabilty fns
-          mortality_data$mortality_proj_new <- mortality_data$mortality_proj - erad*mortality_data[,str_c("mortality_",cat, "_proj")]
-          disability_data$disability_proj_new <- disability_data$disability_proj - erad*disability_data[,str_c("disability_",cat, "_proj")]
-          
-          
-          # Forecast eradicating on both mortality and disability
-          forecasts_both <- forecast_dalys(population_df, fertility_df, mortality_data, disability_data, new = "both",
-                                           start_year = sy, end_year = sy+125, end_age = end_age, 
-                                           no_births = brth, fertility_type = "fertility_med", loc_name = "Regions", 
-                                           growth_transitions = grwth, project_100plus = TRUE) %>% 
-            mutate(start_year = sy, no_births = brth, growth_transitions = grwth, eradication = erad, diseases = cat, type = "both") %>%
-            select(start_year, no_births, growth_transitions, eradication, diseases, type, location, year, age, population, daly)
-          # Forecast eradicating on just mortality
-          forecasts_mort <- forecast_dalys(population_df, fertility_df, mortality_data, disability_data, new = "mortality",
-                                           start_year = sy, end_year = sy+125, end_age = end_age, 
-                                           no_births = brth, fertility_type = "fertility_med", loc_name = "Regions", 
-                                           growth_transitions = grwth, project_100plus = TRUE) %>% 
-            mutate(start_year = sy, no_births = brth, growth_transitions = grwth, eradication = erad, diseases = cat, type = "mortality") %>%
-            select(start_year, no_births, growth_transitions, eradication, diseases, type, location, year, age, population, daly)
-          # Forecast eradicating on just disability
-          forecasts_disab <- forecast_dalys(population_df, fertility_df, mortality_data, disability_data, new = "disability",
-                                           start_year = sy, end_year = sy+125, end_age = end_age, 
-                                           no_births = brth, fertility_type = "fertility_med", loc_name = "Regions", 
-                                           growth_transitions = grwth, project_100plus = TRUE) %>% 
-            mutate(start_year = sy, no_births = brth, growth_transitions = grwth, eradication = erad, diseases = cat, type = "disability") %>%
-            select(start_year, no_births, growth_transitions, eradication, diseases, type, location, year, age, population, daly)
-          
-          full_scenarios <- rbind(forecasts_both, forecasts_mort, forecasts_disab)
-           
-          full_scenarios %>%
-            mutate(newborn = case_when(year - start_year - age == 0 ~ 1, TRUE ~ 0)) %>%
-            group_by(start_year, no_births, growth_transitions, eradication, diseases, type, location) %>%
-            summarise(W = sum(daly), Wnewborn = sum(daly*newborn))
-          
-          # Compare scenarios
-          W_scenarios <- W_scenarios %>%
-            rbind(full_scenarios %>%
-                    mutate(newborn = case_when(year - start_year - age == 0 ~ 1, TRUE ~ 0)) %>%
-                    group_by(start_year, no_births, growth_transitions, eradication, diseases, type, location) %>%
-                    summarise(W = sum(daly), Wnewborn = sum(daly*newborn)))
+          # How much to eradicate of senescent disease (for the cross derivs)
+          for (erad_s in erad_opts){
+            # Only go ahead if erad*erad_s is less that 0.5
+            if (abs(erad*erad_s) < 0.03 | erad %in% c(0.2, 0.4, 0.6, 0.8, 1)){
+              #ii <- ii+1}}}}}}}
+            # Progress update
+            print(str_c("Start year ", sy, ", diseases ", cat, " eradicating ", erad, " and ageing-related eradicating ", erad_s, 
+                        ", growth ", grwth, ", no births ", brth))
+            # Define new mortality and disabilty fns
+            mortality_data$mortality_proj_new <- mortality_data$mortality_proj - erad*mortality_data[,str_c("mortality_",cat, "_proj")]
+            mortality_data$mortality_proj_new <- mortality_data$mortality_proj_new - erad_s*mortality_data[,str_c("mortality_senescent4_proj")]
+            disability_data$disability_proj_new <- disability_data$disability_proj - erad*disability_data[,str_c("disability_",cat, "_proj")]
+            disability_data$disability_proj_new <- disability_data$disability_proj_new - erad*disability_data[,str_c("disability_senescent4_proj")]
+            
+            # Calculate Life Expectancy 
+            LE_birth_results <- mortality_data %>%
+              group_by(location, year) %>%
+              mutate(survival = cumprod(1 - pmin(mortality_proj_new/1e5, 1))) %>%
+              summarise(LE_birth = sum(survival))
+            
+            # Forecast eradicating on both mortality and disability
+            forecasts_both <- forecast_dalys(population_df, fertility_df, mortality_data, disability_data, new = "both",
+                                             start_year = sy, end_year = sy+125, end_age = end_age, 
+                                             no_births = brth, fertility_type = "fertility_med", loc_name = "Regions", 
+                                             growth_transitions = grwth, project_100plus = TRUE) %>% 
+              mutate(start_year = sy, no_births = brth, growth_transitions = grwth, eradication = erad, diseases = cat, erad_senes = erad_s, type = "both") %>%
+              select(start_year, no_births, growth_transitions, eradication, diseases, erad_senes, type, location, year, age, mortality, population, daly)
+            # Forecast eradicating on just mortality
+            forecasts_mort <- forecast_dalys(population_df, fertility_df, mortality_data, disability_data, new = "mortality",
+                                             start_year = sy, end_year = sy+125, end_age = end_age, 
+                                             no_births = brth, fertility_type = "fertility_med", loc_name = "Regions", 
+                                             growth_transitions = grwth, project_100plus = TRUE) %>% 
+              mutate(start_year = sy, no_births = brth, growth_transitions = grwth, eradication = erad, diseases = cat, erad_senes = erad_s, type = "mortality") %>%
+              select(start_year, no_births, growth_transitions, eradication, diseases, erad_senes, type, location, year, age, mortality, population, daly)
+            # Forecast eradicating on just disability
+            forecasts_disab <- forecast_dalys(population_df, fertility_df, mortality_data, disability_data, new = "disability",
+                                             start_year = sy, end_year = sy+125, end_age = end_age, 
+                                             no_births = brth, fertility_type = "fertility_med", loc_name = "Regions", 
+                                             growth_transitions = grwth, project_100plus = TRUE) %>% 
+              mutate(start_year = sy, no_births = brth, growth_transitions = grwth, eradication = erad, diseases = cat, erad_senes = erad_s, type = "disability") %>%
+              select(start_year, no_births, growth_transitions, eradication, diseases, erad_senes, type, location, year, age, mortality, population, daly)
+            
+            full_scenarios <- rbind(forecasts_both, forecasts_mort, forecasts_disab) %>%
+              mutate(newborn = case_when(year - start_year - age == 0 ~ 1, TRUE ~ 0)) %>%
+              group_by(start_year, no_births, growth_transitions, eradication, diseases, type, erad_senes, location, year) %>%
+              summarise(W = sum(daly), Wnewborn = sum(daly*newborn), average_age = sum(age*population)/sum(population), pop_newborns = sum(newborn*population),
+                        population = sum(population)) %>%
+              left_join(LE_birth_results)
+
+            
+            # Compare scenarios
+            W_scenarios <- W_scenarios %>%
+              rbind(full_scenarios)
+            }
+          }
         }
         print("Saving file")
         W_scenarios %>%
