@@ -519,7 +519,7 @@ Systematically go through some options
 # Options
 start_years <- c(2021)
 categories <- c("infant4", "adult_early4", "adult_late4", "senescent4")
-erad_opts <- seq(-0.05,1,0.01)
+erad_opts <- seq(-0.05,1,0.05)
 grwth_opts <- TRUE # c(FALSE, TRUE)
 birth_opts <- FALSE # c(FALSE, TRUE)
 
@@ -569,7 +569,7 @@ for (sy in start_years){
             mortality_data$mortality_proj_new <- mortality_data$mortality_proj - erad*mortality_data[,str_c("mortality_",cat, "_proj")]
             mortality_data$mortality_proj_new <- mortality_data$mortality_proj_new - erad_s*mortality_data[,str_c("mortality_senescent4_proj")]
             disability_data$disability_proj_new <- disability_data$disability_proj - erad*disability_data[,str_c("disability_",cat, "_proj")]
-            disability_data$disability_proj_new <- disability_data$disability_proj_new - erad*disability_data[,str_c("disability_senescent4_proj")]
+            disability_data$disability_proj_new <- disability_data$disability_proj_new - erad_s*disability_data[,str_c("disability_senescent4_proj")]
             
             # Calculate Life Expectancy 
             LE_birth_results <- mortality_data %>%
