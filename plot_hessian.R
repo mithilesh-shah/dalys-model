@@ -19,35 +19,39 @@ W_scenarios <- read_rds("figures/scenarios/W_scenarios.rds")
 
 # Find the senesecent
 W_scenarios_senesc <- W_scenarios %>%
-  filter(eradication == 0 ) %>%
-  mutate(diseases = "senescent4", eradication = erad_senes) %>% 
+  ungroup() %>%
+  filter(erad1 == 0 , disease2 == "senescent4") %>%
+  mutate(disease1 = "senescent4", erad1 = erad2) %>% 
+  select(-erad2, -disease2) %>%
   distinct()
 # Remove the cross partials 
 W_scenarios_nocross <- W_scenarios %>%
   ungroup() %>%
-  filter(erad_senes == 0) %>%
-  rbind(W_scenarios_senesc) %>%
-  select(-erad_senes)
+  filter(erad2 == 0) %>%
+  select(-erad2, -disease2) %>%
+  distinct() %>%
+  rbind(W_scenarios_senesc)
+
 # Clean up and add global
 W_scenarios_nocross <- W_scenarios_nocross %>%
   mutate(location = "Global") %>%
-  group_by(start_year, no_births, growth_transitions, diseases, type, location, eradication, year) %>%
+  group_by(start_year, no_births, growth_transitions, disease1, type, location, erad1, year) %>%
   summarise(W = sum(W), Wnewborn = sum(Wnewborn), 
             average_age = sum(average_age*population)/sum(population), LE_birth = sum(LE_birth*population)/sum(population),
             population = sum(population), pop_newborns = sum(pop_newborns)) %>%
   rbind(W_scenarios_nocross) %>%
-  mutate(diseases = case_when(str_detect(diseases, "infant4") ~ "Infant",
-                              str_detect(diseases, "adult_early4") ~ "Adult (early)",
-                              str_detect(diseases, "adult_late4") ~ "Adult (late)",
-                              str_detect(diseases, "senescent4") ~ "Ageing-related", TRUE ~ "All")) %>%
+  mutate(diseases = case_when(str_detect(disease1, "infant4") ~ "Infant",
+                              str_detect(disease1, "adult_early4") ~ "Adult (early)",
+                              str_detect(disease1, "adult_late4") ~ "Adult (late)",
+                              str_detect(disease1, "senescent4") ~ "Ageing-related", TRUE ~ "All")) %>%
   mutate(diseases = factor(diseases, ordered = T, levels = c("Infant", "Adult (early)",  "Adult (late)", "Ageing-related")),
          location = str_remove(location, "World Bank "),
          location = factor(location, ordered = T, levels = c("Global", "Low Income",  "Lower Middle Income", "Upper Middle Income", "High Income")))
 
 W_scenarios_nocross %>%
   group_by(start_year, no_births, growth_transitions, diseases, type, location) %>%
-  mutate(W_start = sum((eradication == 0)*W),
-         Wnewborn_start = sum((eradication == 0)*Wnewborn))
+  mutate(W_start = sum((erad1 == 0)*W),
+         Wnewborn_start = sum((erad1 == 0)*Wnewborn))
   
 
 
@@ -59,7 +63,7 @@ W_scenarios_nocross %>%
   filter(location %in% c("Global", "Low Income", "High Income")) %>%
   filter(year %in% c(2021, 2046, 2071, 2096, 2121, 2146)) %>%
   filter(type == "both") %>%
-  ggplot(aes(x = eradication)) + theme_bw() + 
+  ggplot(aes(x = erad1)) + theme_bw() + 
   facet_wrap(~location+diseases, ncol = 4) +
   geom_line(aes(y = average_age, color = year, group = year)) +
   scale_color_gradientn("Year", colours = rainbow(6)) +
@@ -72,7 +76,7 @@ W_scenarios_nocross %>%
   filter(year %in% c(2021, 2046, 2071, 2096, 2121, 2146)) %>%
   filter(location %in% c("Global", "Low Income", "High Income")) %>% 
   filter(type == "both") %>%
-  ggplot(aes(x = eradication)) + theme_bw() + 
+  ggplot(aes(x = erad1)) + theme_bw() + 
   facet_wrap(~location+diseases, ncol = 4) +
   geom_line(aes(y = LE_birth, color = year, group = year)) +
   scale_color_gradientn("Year", colours = rainbow(6)) +
@@ -86,8 +90,8 @@ W_scenarios_nocross %>%
   filter(location %in% c("Global", "Low Income", "High Income")) %>% 
   filter(type == "both") %>%
   group_by(location, diseases) %>%
-  mutate(pop_start = sum((year == 2021)*(eradication == 0)*population)) %>%
-  ggplot(aes(x = eradication)) + theme_bw() + 
+  mutate(pop_start = sum((year == 2021)*(erad1 == 0)*population)) %>%
+  ggplot(aes(x = erad1)) + theme_bw() + 
   facet_wrap(~location+diseases, ncol = 4) +
   geom_line(aes(y = population/pop_start, color = year, group = year)) +
   scale_color_gradientn("Year", colours = rainbow(6)) +
