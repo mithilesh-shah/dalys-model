@@ -9,9 +9,10 @@ library(janitor)
 "
 Clean GBD data
 Download link: 
-https://vizhub.healthdata.org/gbd-results?params=gbd-api-2021-permalink/9328a1ef299e1608d588330914d5699a
+https://vizhub.healthdata.org/gbd-results/?params=gbd-api-2021-permalink/f9c0bada3b829adb34dd7e37ad46e000
 and
 https://vizhub.healthdata.org/gbd-results?params=gbd-api-2021-permalink/a37b36895d7dd9fd807264da0c892ab5
+
 "
 GBD_files <- dir("/Users/julianashwin/Documents/Research/DALYs/data/GBD_raw_2021")
 gbd_df_all <- tibble()
@@ -19,7 +20,7 @@ file <- GBD_files[20]
 for (file in GBD_files){
   print(file)
   df_in <- read_csv(str_c("/Users/julianashwin/Documents/Research/DALYs/data/GBD_raw_2021/", file, "/", file, ".csv")) %>%
-    dplyr::select(location_name, cause_name, age_name, sex_name, measure_name, metric_name, val, upper, lower) %>%
+    dplyr::select(location_name, year, cause_name, age_name, sex_name, measure_name, metric_name, val, upper, lower) %>%
     filter(!str_detect(cause_name, "Total")) %>%
     mutate(measure_name = str_replace(measure_name, "YLDs \\(Years Lived with Disability\\)", "YLDs")) %>%
     mutate(measure_name = str_replace(measure_name, "YLLs \\(Years of Life Lost\\)", "YLLs")) %>%
@@ -35,7 +36,8 @@ gbd_df_all %>%
   mutate(age_name = case_when(str_detect(age_name, "years") ~ age_name, TRUE ~ str_c(age_name, " years"))) %>%
   arrange(location_name, cause_name, measure_name, metric_name, age_name, sex_name) %>%
   saveRDS("/Users/julianashwin/Documents/Research/DALYs/data/gbd_data_all_2021.rds")
-#gbd_df_all <- readRDS("/Users/julianashwin/Documents/Research/DALYs/data/gbd_data_all.rds")
+#gbd_df_all <- readRDS("/Users/julianashwin/Documents/Research/DALYs/data/gbd_data_all_2021.rds")
+#gbd_df_all_2019 <- readRDS("/Users/julianashwin/Documents/Research/DALYs/data/gbd_data_all_2019.rds")
 
 # Save names of all countries in GBD data
 gbd_df_all %>%
@@ -43,6 +45,7 @@ gbd_df_all %>%
   saveRDS("raw_data/GBD/gbd_data_countries.rds")
 # Save names of all causes in GBD data
 gbd_df_all %>%
+  tabyl(cause_name, year)
   distinct(cause_name) %>%
   saveRDS("raw_data/GBD/gbd_data_causes.rds")
 # Save names of all ages in GBD data
@@ -97,88 +100,6 @@ global_incidence_df <- read_csv("raw_data/GBD/IHME-GBD_2019_DATA-global-incidenc
   select(age_name, cause_name, incidence_rate)
  
 
-"
-Clean cluster membership data
-"
-# Import hierarchy of causes
-gbd_hierarchy_df <- read_xlsx("raw_data/GBD/IHME_GBD_2021_HIERARCHIES.xlsx", sheet = "Cause Hierarchy") %>%  
-  rename_all(~tolower(str_replace_all(., "\\s+", "_"))) %>%
-  right_join(distinct(gbd_df_all, cause_name)) %>%
-  separate(cause_outline, into = c("level1_outline",  "level2_outline", "level3_outline", "level4_outline"), remove = FALSE) %>%
-  mutate(level2_outline = str_c(level1_outline, ".", level2_outline),
-         level3_outline = str_c(level2_outline, ".", level3_outline),
-         level4_outline = cause_outline)
-# Clusters with K = 3
-cluster3_df <- read_xlsx("raw_data/clusters/kmeans_clusters_3.xlsx") %>%
-  select(-`...1`) %>%
-  filter(!str_detect(cause_name, "Total")) %>%
-  pivot_longer(cols = c(-cause_name, -cluster_no), names_to = "age_name", values_to = "incidence") %>%
-  mutate(age_name = str_replace(age_name, "<1 year", "0-1 years")) %>%
-  mutate(age_name = str_replace(age_name, "95\\+ years", "95-99 years")) %>%
-  mutate(age = as.numeric(str_sub(age_name, 1, str_locate(age_name, "-")[,"start"]-1))) %>%
-  mutate(cluster_3 = case_when(cluster_no == 0  ~ "Ageing-related",
-                             cluster_no == 1  ~ "Adult",
-                             cluster_no == 2  ~ "Infant")) %>%
-  dplyr::select(cause_name, age, age_name, incidence, cluster_3)
-# Clusters with K = 4
-cluster4_df <- read_xlsx("raw_data/clusters/kmeans_clusters_4.xlsx") %>%
-  select(-`...1`) %>%
-  filter(!str_detect(cause_name, "Total")) %>%
-  pivot_longer(cols = c(-cause_name, -cluster_no), names_to = "age_name", values_to = "incidence") %>%
-  mutate(age_name = str_replace(age_name, "<1 year", "0-1 years")) %>%
-  mutate(age_name = str_replace(age_name, "95\\+ years", "95-99 years")) %>%
-  mutate(age = as.numeric(str_sub(age_name, 1, str_locate(age_name, "-")[,"start"]-1))) %>%
-  mutate(cluster_4 = case_when(cluster_no == 0  ~ "Adult (late)",
-                             cluster_no == 1  ~ "Adult (early)",
-                             cluster_no == 2  ~ "Infant",
-                             cluster_no == 3  ~ "Ageing-related")) %>%
-  dplyr::select(cause_name, age, cluster_4)
-# Merge clusters
-clusters_df <- cluster3_df %>%
-  left_join(cluster4_df) %>%
-  left_join(select(gbd_hierarchy_df, cause_name, cause_outline)) %>%
-  left_join(global_incidence_df) %>%
-  mutate(incidence_rate = replace_na(incidence_rate, 0))
-# Plot incidence for K = 3
-clusters_df %>%
-  ggplot(aes(x = age, y = incidence)) + theme_bw() + 
-  geom_line(aes(group = cause_name, color = cluster_3), alpha = 0.2, size = 0.2) +
-  geom_line(aes(color = cluster_3), stat = "summary", fun = "mean", size = 0.5) + 
-  scale_color_manual("Disease clusters", values = c("Ageing-related" = "firebrick1", "Adult" = "blue3", "Infant" = "forestgreen")) + 
-  xlab("Age") + ylab("Incidence (standardised)") + 
-  scale_y_continuous(limits = c(-2.5,4.5), expand = c(0, 0)) +
-  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank())
-ggsave("figures/clustering/clusters3.pdf", width = 6, height = 3)
-# Plot incidence for K = 4
-clusters_df %>%
-  ggplot(aes(x = age, y = incidence)) + theme_bw() + 
-  geom_line(aes(group = cause_name, color = cluster_4), alpha = 0.2, size = 0.2) +
-  geom_line(aes(color = cluster_4), stat = "summary", fun = "mean", size = 0.5) + 
-  scale_color_manual("Disease cluster", values = c("Ageing-related" = "firebrick1", "Adult (late)" = "blue3", 
-                                                   "Adult (early)" = "cornflowerblue", "Infant" = "forestgreen")) + 
-  xlab("Age") + ylab("Incidence (standardised)") + 
-  scale_y_continuous(limits = c(-2.5,4.5), expand = c(0, 0)) +
-  theme(axis.ticks.y = element_blank(), axis.text.y = element_blank())
-ggsave("figures/clustering/clusters4.pdf", width = 6, height = 3)
-
-clusters_df %>%
-  mutate(cluster_4 = factor(cluster_4, ordered = T, levels = c("Infant", "Adult (early)", "Adult (late)", "Ageing-related"))) %>%
-  group_by(cause_name) %>%
-  mutate(incidence_sd = sd(incidence_rate)) %>%
-  ggplot(aes(x = age, y = incidence_rate/incidence_sd)) + theme_bw() + 
-  geom_line(aes(group = cause_name, color = cluster_4), alpha = 0.2, size = 0.1) +
-  geom_line(aes(color = cluster_4), stat = "summary", fun = "mean", size = 0.5) + 
-  scale_color_manual("Disease cluster", values = c("Ageing-related" = "firebrick1", "Adult (late)" = "blue3", 
-                                                   "Adult (early)" = "cornflowerblue", "Infant" = "forestgreen")) + 
-  xlab("Age") + ylab("Incidence (standardised to unit sd)") + 
-  coord_cartesian(ylim = c(-0.1,4.5))
-ggsave("figures/clustering/clusters4_nonneg.pdf", width = 9, height = 4)
-
-
-
-# Save 
-clusters_df %>%
-  write_csv("clean_data/cluster_membership_data.csv")
 
 "
 WDI data on income classification and other indicators
