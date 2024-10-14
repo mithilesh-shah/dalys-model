@@ -19,7 +19,14 @@ gbd_df_all <- tibble()
 file <- GBD_files[20]
 for (file in GBD_files){
   print(file)
-  df_in <- read_csv(str_c("/Users/julianashwin/Documents/Research/DALYs/data/GBD_raw_2021/", file, "/", file, ".csv")) %>%
+  df_in <- read_csv(str_c("/Users/julianashwin/Documents/Research/DALYs/data/GBD_raw_2021/", file, "/", file, ".csv")) 
+  
+  if ("location" %in% names(df_in)){
+    df_in <- df_in %>%
+      rename(cause_name = cause, location_name = location, age_name = age, sex_name = sex, 
+             measure_name = measure, metric_name = metric)
+  }
+  df_in <- df_in %>%
     dplyr::select(location_name, year, cause_name, age_name, sex_name, measure_name, metric_name, val, upper, lower) %>%
     filter(!str_detect(cause_name, "Total")) %>%
     mutate(measure_name = str_replace(measure_name, "YLDs \\(Years Lived with Disability\\)", "YLDs")) %>%
@@ -33,7 +40,8 @@ for (file in GBD_files){
   gbd_df_all <- rbind(gbd_df_all, df_in)
 }
 gbd_df_all %>%
-  mutate(age_name = case_when(str_detect(age_name, "years") ~ age_name, TRUE ~ str_c(age_name, " years"))) %>%
+  distinct() %>%
+  #mutate(age_name = case_when(str_detect(age_name, "years") ~ age_name, TRUE ~ str_c(age_name, " years"))) %>%
   arrange(location_name, cause_name, measure_name, metric_name, age_name, sex_name) %>%
   saveRDS("/Users/julianashwin/Documents/Research/DALYs/data/gbd_data_all_2021.rds")
 #gbd_df_all <- readRDS("/Users/julianashwin/Documents/Research/DALYs/data/gbd_data_all_2021.rds")
@@ -45,7 +53,6 @@ gbd_df_all %>%
   saveRDS("raw_data/GBD/gbd_data_countries.rds")
 # Save names of all causes in GBD data
 gbd_df_all %>%
-  tabyl(cause_name, year)
   distinct(cause_name) %>%
   saveRDS("raw_data/GBD/gbd_data_causes.rds")
 # Save names of all ages in GBD data
@@ -84,21 +91,51 @@ gbd_df_all %>%
   saveRDS("raw_data/GBD/gbd_data_prevalence.rds")
 
 
+# Clean and save the cause hierarchy
+gbd_df_all %>%
+  distinct(cause_name) %>%
+  saveRDS("raw_data/GBD/gbd_data_causes.rds")
+
+
+gbd_hierarchy_df <- read_xlsx("raw_data/GBD/IHME_GBD_2021_HIERARCHIES.xlsx", sheet = "Cause Hierarchy") %>%
+  rename_all(~tolower(str_replace_all(., "\\s+", "_"))) %>%
+
+gbd_hierarchy_detailed_df <- gbd_hierarchy_df %>%  
+  separate(cause_outline, into = c("level1_outline",  "level2_outline", "level3_outline", "level4_outline"), remove = FALSE) %>%
+  mutate(level2_outline = str_c(level1_outline, ".", level2_outline),
+         level3_outline = str_c(level2_outline, ".", level3_outline),
+         level4_outline = cause_outline) %>%
+  right_join(distinct(gbd_df_all, cause_name)) %>% 
+  left_join(gbd_hierarchy_df %>%
+              select(cause_name, cause_outline)  %>%
+              rename(level1_name = cause_name, level1_outline = cause_outline) %>%
+              distinct()) %>%
+  left_join(gbd_hierarchy_df %>%
+              select(cause_name, cause_outline)  %>%
+              rename(level2_name = cause_name, level2_outline = cause_outline) %>%
+              distinct()) %>%
+  left_join(gbd_hierarchy_df %>%
+              select(cause_name, cause_outline)  %>%
+              rename(level3_name = cause_name, level3_outline = cause_outline) %>%
+              distinct()) %>%
+  relocate(level1_name, .after = level1_outline) %>%
+  relocate(level2_name, .after = level2_outline) %>%
+  relocate(level3_name, .after = level3_outline)
+
+gbd_hierarchy_detailed_df %>%  
+  saveRDS("raw_data/GBD/gbd_data_cause_hierarchy.rds")
+
+
+
+
 # Import the gbd_countries from saved file
+
+
 gbd_countries <- readRDS("raw_data/GBD/gbd_data_countries.rds")
 gbd_causes <- readRDS("raw_data/GBD/gbd_data_causes.rds")
 gbd_ages <- readRDS("raw_data/GBD/gbd_data_ages.rds")
 
 
-global_incidence_df <- read_csv("raw_data/GBD/IHME-GBD_2019_DATA-global-incidence.csv") %>%
-  mutate(age_name = str_replace(age_name, "<1 year", "0-1 years")) %>%
-  mutate(age_name = str_replace(age_name, "95\\+ years", "95-99 years")) %>%
-  mutate(age_name = case_when(str_detect(age_name, "years") ~ age_name, TRUE ~ str_c(age_name, " years"))) %>%
-  filter(cause_name %in% gbd_causes$cause_name & age_name %in% gbd_ages$age_name,
-         metric_name == "Rate") %>% 
-  mutate(incidence_rate = val/1e5) %>%
-  select(age_name, cause_name, incidence_rate)
- 
 
 
 "

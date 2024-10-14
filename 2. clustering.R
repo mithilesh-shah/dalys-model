@@ -10,7 +10,7 @@ rm(list=ls())
 library(tidyverse)
 library(readxl)
 library(janitor)
-library(maotai)
+library(ClusterR)
 
 
 age_groups <- c("0-1 years", "1-2 years", "2-4 years", "5-9 years", "10-14 years", "15-19 years", 
@@ -26,6 +26,8 @@ global_daly_df <- readRDS("raw_data/GBD/gbd_data_dalys.rds") %>%
   filter(location_name == "Global",
          metric_name == "Rate",
          year == 2021) %>%
+  complete(age_name, cause_name) %>%
+  mutate(val = replace_na(val, 0)) %>%
   mutate(age_name = str_replace(age_name, "<1 year", "0-1 years")) %>%
   mutate(age_name = str_replace(age_name, "12-23 months", "1-2 years")) %>%
   mutate(age_name = str_replace(age_name, "95\\+ years", "95-99 years")) %>%
@@ -34,21 +36,19 @@ global_daly_df <- readRDS("raw_data/GBD/gbd_data_dalys.rds") %>%
 # Check that all causes are covered 
 tabyl(all_causes$cause_name %in% unique(global_daly_df$cause_name))
 
-
-
 ## Convert to matrix for clustering
 cluster_matrix <- global_daly_df %>%
   group_by(cause_name) %>%
   mutate(val_std = (val - mean(val))/sd(val)) %>%
-  mutate(no_val= is.na(val_std)) %>%
-  tabyl(no_val)
-  pivot_wider(id_cols = cause_name, names_from = age_name, values_from = val) 
-
+  mutate(val_std = replace_na(val_std, 0)) %>%
+  mutate(age = factor(age_name, levels = age_groups, ordered = T)) %>%
+  arrange(cause_name, age) %>%
+  pivot_wider(id_cols = cause_name, names_from = age_name, values_from = val_std) 
 
 names(cluster_matrix)
 
-clusters<- kmeans(as.matrix(cluster_matrix[,2:ncol(cluster_matrix)]), centers = 3)
-
+as.matrix(cluster_matrix[,2:ncol(cluster_matrix)]) <- KMeans_rcpp(as.matrix(cluster_matrix[,2:ncol(cluster_matrix)]), clusters = 4, num_init = 5, 
+                 max_iters = 100, initializer = 'kmeans++')
 
 global_daly_df %>%
   mutate(age = as.numeric(str_sub(age_name, 1, str_locate(age_name, "-")[,"start"]-1))) %>%
