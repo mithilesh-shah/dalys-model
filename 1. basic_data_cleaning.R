@@ -5,6 +5,7 @@ rm(list=ls())
 library(tidyverse)
 library(readxl)
 library(janitor)
+library(beepr)
 
 "
 Clean GBD data
@@ -33,6 +34,7 @@ for (file in GBD_files){
     mutate(measure_name = str_replace(measure_name, "YLLs \\(Years of Life Lost\\)", "YLLs")) %>%
     mutate(measure_name = str_replace(measure_name, "DALYs \\(Disability-Adjusted Life Years\\)", "DALYs")) %>%
     mutate(age_name = str_replace(age_name, "<1 year", "0-1 years")) %>%
+    mutate(age_name = str_replace(age_name, "12-23 months", "1-2 years")) %>%
     mutate(age_name = str_replace(age_name, "95\\+ years", "95-99 years")) %>%
     mutate(age_name = case_when(str_detect(age_name, "years") ~ age_name, TRUE ~ str_c(age_name, " years")))
     
@@ -92,13 +94,8 @@ gbd_df_all %>%
 
 
 # Clean and save the cause hierarchy
-gbd_df_all %>%
-  distinct(cause_name) %>%
-  saveRDS("raw_data/GBD/gbd_data_causes.rds")
-
-
 gbd_hierarchy_df <- read_xlsx("raw_data/GBD/IHME_GBD_2021_HIERARCHIES.xlsx", sheet = "Cause Hierarchy") %>%
-  rename_all(~tolower(str_replace_all(., "\\s+", "_"))) %>%
+  rename_all(~tolower(str_replace_all(., "\\s+", "_")))
 
 gbd_hierarchy_detailed_df <- gbd_hierarchy_df %>%  
   separate(cause_outline, into = c("level1_outline",  "level2_outline", "level3_outline", "level4_outline"), remove = FALSE) %>%
@@ -124,8 +121,6 @@ gbd_hierarchy_detailed_df <- gbd_hierarchy_df %>%
 
 gbd_hierarchy_detailed_df %>%  
   saveRDS("raw_data/GBD/gbd_data_cause_hierarchy.rds")
-
-
 
 
 # Import the gbd_countries from saved file
@@ -304,11 +299,13 @@ lifetab_df_post85 <- lifetab_df_post85 %>%
   filter(location_name %in% gbd_countries$location_name) %>%
   dplyr::select(location_name, year, age, mortality, survival, remaining_le)
 
+beep()
+
 lifetab_df <- lifetab_df_pre85 %>%
   rbind(lifetab_df_post85) %>%
   arrange(location_name, year, age)
 
-lifetab_df <- read_xlsx("raw_data/WPP/WPP2022_MORT_F06_1_SINGLE_AGE_LIFE_TABLE_ESTIMATES_BOTH_SEXES_2019.xlsx", skip = 16) %>%
+lifetab_df_old <- read_xlsx("raw_data/WPP/WPP2022_MORT_F06_1_SINGLE_AGE_LIFE_TABLE_ESTIMATES_BOTH_SEXES_2019.xlsx", skip = 16) %>%
   rename(location = `Region, subregion, country or area *`, 
          type = Type, year = Year, age = `Age (x)`, 
          mortality = `Central death rate m(x,n)`,
@@ -334,11 +331,18 @@ pop_df %>%
   ggplot() + theme_bw() + facet_wrap(~year) +
   geom_line(aes(x = age, y = survival, group = location_name, alpha = population))
 
-pop_df %>%
+country_lifetab_df <- pop_df %>%
   left_join(lifetab_df) %>%
   mutate(age_name = str_c(plyr::round_any(age,5, f = floor), "-", plyr::round_any(age,5, f = floor)+4, " years"),
-         age_name = case_when(age == 0 ~ "0-1 years", age >=1 & age < 5 ~  "1-4 years", 
-                              age >= 100 ~ "100+ years", TRUE ~ age_name)) %>%
+         age_name = case_when(age == 0 ~ "0-1 years", age >=1 & age < 2 ~  "1-2 years", 
+                              age >=2 & age <= 4 ~  "2-4 years", 
+                              age >= 100 ~ "100+ years", TRUE ~ age_name)) 
+
+unique(country_lifetab_df$age_name)[which(!(unique(country_lifetab_df$age_name) %in% gbd_ages$age_name))]
+gbd_ages$age_name[which(!(gbd_ages$age_name %in% unique(country_lifetab_df$age_name)))]
+
+
+country_lifetab_df %>%
   saveRDS("clean_data/country_lifetab_data.rds")
   
 
